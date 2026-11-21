@@ -707,6 +707,11 @@
     getLocation: function (opts) {
       return call('getLocation', opts || {});
     },
+    // 定位环境前置检查（权限 → 定位服务开关）：通过 resolve({})，不通过 reject
+    // （name 为 NotAllowedError / NotSupportedError / LocationServiceDisabled）。
+    checkLocationEnv: function (opts) {
+      return call('checkLocationEnv', opts || {});
+    },
   };
 
   // 方便用户/支持人员排查：window.k5diag()

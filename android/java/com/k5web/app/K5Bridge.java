@@ -1149,27 +1149,65 @@ public final class K5Bridge {
         t.start();
     }
 
+    /**
+     * 定位环境前置检查（每次定位检测的开头调用）：先权限检测，随后立即判断
+     * 定位服务是否已开启（位于权限检测之后、其他定位逻辑之前）。任一不通过
+     * 时直接回复错误（服务未开启会弹窗引导），通过时回复 ok。
+     */
+    @JavascriptInterface
+    public void checkLocationEnv(final String id, final String argsJson) {
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (geoEnvReady(id)) {
+                        replyOk(id, new JSONObject());
+                    }
+                } catch (Throwable t) {
+                    replyError(id, t);
+                }
+            }
+        }, "k5-geoenv");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * 定位环境前置检查公共实现：① 权限检测；② 定位服务开关检测（位于权限
+     * 检测之后）。不通过时回复对应错误并返回 false（服务未开启同时弹窗引导）。
+     */
+    private boolean geoEnvReady(final String id) {
+        boolean fine = activity.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        boolean coarse = activity.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        if (!fine && !coarse) {
+            replyError(id, "NotAllowedError", "定位权限未授予：请在系统设置中允许本应用使用位置权限");
+            return false;
+        }
+        final LocationManager lm = (LocationManager) activity.getSystemService(Context.LOCATION_SERVICE);
+        if (lm == null) {
+            replyError(id, "NotSupportedError", "设备不支持定位服务");
+            return false;
+        }
+        boolean gpsOn = geoProviderEnabled(lm, LocationManager.GPS_PROVIDER);
+        boolean netOn = geoProviderEnabled(lm, LocationManager.NETWORK_PROVIDER);
+        if (!gpsOn && !netOn) {
+            // 定位服务总开关未开启：弹窗引导用户去系统设置开启，而不是静默失败/超时
+            promptEnableLocationService();
+            replyError(id, "LocationServiceDisabled", "设备定位服务未开启：请在弹窗中开启定位服务后重试");
+            return false;
+        }
+        return true;
+    }
+
     private void geoAcquire(final String id) {
         try {
-            boolean fine = activity.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                    == android.content.pm.PackageManager.PERMISSION_GRANTED;
-            boolean coarse = activity.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION)
-                    == android.content.pm.PackageManager.PERMISSION_GRANTED;
-            if (!fine && !coarse) {
-                replyError(id, "NotAllowedError", "定位权限未授予：请在系统设置中允许本应用使用位置权限");
+            // 前置环境检查：先权限，后定位服务开关；未通过（含服务未开启弹窗）直接返回
+            if (!geoEnvReady(id)) {
                 return;
             }
             final LocationManager lm = (LocationManager) activity.getSystemService(Context.LOCATION_SERVICE);
-            if (lm == null) {
-                replyError(id, "NotSupportedError", "设备不支持定位服务");
-                return;
-            }
-            boolean gpsOn = geoProviderEnabled(lm, LocationManager.GPS_PROVIDER);
-            boolean netOn = geoProviderEnabled(lm, LocationManager.NETWORK_PROVIDER);
-            if (!gpsOn && !netOn) {
-                replyError(id, "NotAvailableError", "设备定位服务未开启：请打开系统的 GPS/定位开关");
-                return;
-            }
 
             // 1) 有 5 分钟内的最近位置时直接返回（无网络也能拿到 GPS 缓存结果）
             Location recent = geoBetter(lm.getLastKnownLocation(LocationManager.GPS_PROVIDER),
@@ -1180,6 +1218,8 @@ public final class K5Bridge {
             }
 
             // 2) 请求一次实时定位：GPS(卫星) 优先，网络 Provider 若开启则并行竞速，首个结果胜出
+            boolean gpsOn = geoProviderEnabled(lm, LocationManager.GPS_PROVIDER);
+            boolean netOn = geoProviderEnabled(lm, LocationManager.NETWORK_PROVIDER);
             final GeoSession session = new GeoSession(this, id, lm);
             try {
                 if (gpsOn) {
@@ -1284,6 +1324,48 @@ public final class K5Bridge {
         } catch (Throwable t) {
             return false;
         }
+    }
+
+    /** 定位服务（GPS/网络定位开关）未开启时弹窗引导用户前往系统设置开启；重复触发不叠加弹窗。 */
+    private android.app.AlertDialog geoSettingsDialog;
+
+    private void promptEnableLocationService() {
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (geoSettingsDialog != null && geoSettingsDialog.isShowing()) {
+                        return; // 已有引导弹窗，不重复弹
+                    }
+                    geoSettingsDialog = new android.app.AlertDialog.Builder(activity)
+                            .setTitle("定位服务未开启")
+                            .setMessage("获取经纬度需要开启设备的定位服务（GPS）。是否前往系统设置开启？")
+                            .setCancelable(true)
+                            .setPositiveButton("去开启", new android.content.DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(android.content.DialogInterface dialog, int which) {
+                                    try {
+                                        activity.startActivity(new Intent(
+                                                android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+                                    } catch (Throwable t) {
+                                        Log.w(TAG, "open location settings failed", t);
+                                    }
+                                }
+                            })
+                            .setNegativeButton("取消", null)
+                            .show();
+                } catch (Throwable t) {
+                    Log.w(TAG, "show location dialog failed", t);
+                    // 弹窗失败（如页面切换中）时退化为 Toast 提示
+                    try {
+                        android.widget.Toast.makeText(activity,
+                                "设备定位服务未开启：请打开系统的 GPS/定位开关",
+                                android.widget.Toast.LENGTH_LONG).show();
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+        });
     }
 
     private Location geoBetter(Location a, Location b) {

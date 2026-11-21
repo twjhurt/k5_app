@@ -4,6 +4,12 @@
       <span>正在联网获取星历</span>
       <a-link theme="primary" style="margin-left: 12px;" @click="cancelFetchEphemeris">终止获取</a-link>
     </t-message>
+    <t-message v-if="locState.locating" theme="loading" class="midMessage">
+      <div style="display: flex; align-items: center; min-width: 340px;">
+        <span style="flex: 1;">正在获取定位：{{ locState.stage }}（已用时 {{ locState.elapsed }} 秒）</span>
+        <a-button size="mini" type="text" style="margin-left: 12px; flex-shrink: 0;" @click="cancelLocate">停止定位</a-button>
+      </div>
+    </t-message>
     <a-modal width="650px" class="self-sat-modal" v-model:visible="state.selfSatModal" @ok="addSelfSat">
       <template #title>
         {{ $t("sat.selfSatInfo") }}
@@ -234,6 +240,9 @@ onUnmounted(() => {
   try {
     clearInterval(state.timer)
   } catch { }
+  try {
+    if (locTimer) clearInterval(locTimer)
+  } catch { }
 })
 
 const writeTime = async () => {
@@ -310,6 +319,31 @@ const cancelFetchEphemeris = () => {
   }
 }
 
+// 获取定位提示窗状态：阶段（网络定位/卫星定位）+ 已用时秒数，支持中断
+const locState = reactive({ locating: false, stage: '网络定位', elapsed: 0 });
+let locTimer: any = null;
+let locCancelled = false;
+const startLocTip = () => {
+  locCancelled = false;
+  locState.locating = true;
+  locState.stage = '网络定位';
+  locState.elapsed = 0;
+  if (locTimer) clearInterval(locTimer);
+  locTimer = setInterval(() => { locState.elapsed += 1; }, 1000);
+}
+const stopLocTip = () => {
+  locState.locating = false;
+  if (locTimer) {
+    clearInterval(locTimer);
+    locTimer = null;
+  }
+}
+const cancelLocate = () => {
+  locCancelled = true;
+  stopLocTip();
+  Message.info('已停止定位')
+}
+
 const initSat = async () => {
   setLoading(true)
   try {
@@ -344,6 +378,8 @@ const initSat = async () => {
     // 仅在解析出有效数据时写入缓存，避免把限流/错误页缓存后整段会话无法恢复
     if (!cached && ommList.length) {
       sessionStorage.setItem('satGpJson', rst)
+      // 星历通过网络获取成功时提示（缓存加载不提示）
+      Message.success('星历获取成功')
     }
     // 星历获取成功：自动把最新星历保存到应用内部存储（localStorage，关闭应用不清除），并记录保存时间
     if (ommList.length) {
@@ -390,8 +426,14 @@ const importLastEphemeris = () => {
 
 const getLocation = async () => {
   setLoading(true)
+  startLocTip()
   // 网络正常时沿用原有浏览器定位；无网络/网络定位失败时自动切换卫星定位兜底
-  getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000 }).then((e) => {
+  // 第二参数为阶段回调：'web' 网络定位开始 / 'native' 卫星定位兜底开始
+  getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000 }, (stage) => {
+    locState.stage = stage === 'native' ? '卫星定位' : '网络定位'
+  }).then((e) => {
+    stopLocTip()
+    if (locCancelled) { setLoading(false); return }
     if (e.coords) {
       state.lat = e.coords.latitude
       state.lng = e.coords.longitude
@@ -399,8 +441,13 @@ const getLocation = async () => {
     }
     setLoading(false)
   }).catch((err) => {
+    stopLocTip()
+    if (locCancelled) { setLoading(false); return }
     setLoading(false)
-    if (err && err.code === err.PERMISSION_DENIED) {
+    if (err && err.name === 'LocationServiceDisabled') {
+      // 定位服务未开启：原生侧已弹出"去开启"引导窗，这里同步提示
+      Message.warning('设备定位服务未开启，请在弹窗中开启定位服务后重试')
+    } else if (err && err.code === err.PERMISSION_DENIED) {
       Message.error('定位失败：请在系统设置中允许本应用使用位置权限')
     } else {
       Message.error('定位失败：' + (err && err.message ? err.message : '请检查设备定位服务是否开启'))
