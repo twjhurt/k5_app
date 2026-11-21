@@ -1,84 +1,97 @@
-# K5Web
+# K5Web 安卓离线版
 
-- 世界业余无线电日 K5Web 正式开源，添加开源许可协议。
-- 感谢所有 HAM 。
+基于开源项目 [K5Web](https://github.com/silenty4ng/k5web)（UV-K5/K6 写频 Web 应用）构建的**安卓离线版**：将完整 Web 应用打包为单个 APK，内置站点资源，无需网络即可运行，并通过原生 USB 桥驱动 CH340/CH341 写频线（OTG）连接手台，实现写频、备份、固件升级等全部功能。
 
-## 简介
+> 下载最新 APK 请前往 [**Releases**](https://github.com/twjhurt/k5_app/releases)（v1.0.0 ~ v1.0.17 全部历史版本均已发布）。
 
-K5Web 用于对兼容业余无线电台 UV-K5 写频、更新固件、写入星历等。
+## 特性
 
-## 平台支持
-
-| 平台 | 连接方式 | 状态 |
-|------|----------|------|
-| 桌面 Chrome / Edge / Opera | Web Serial API | 稳定，推荐 |
-| 安卓 Chrome（OTG + CH340 写频线） | WebUSB + CH341 驱动 | **实验性** |
-| iOS / 其他浏览器 | — | 不支持 |
-
-### 安卓 WebUSB（实验性）
-
-安卓上 **只要浏览器提供 WebUSB，就直接走 WebUSB，不再尝试原生 Web Serial**：Chrome 148+ 在安卓上也会暴露 `navigator.serial`，但它驱动不了 CH340 这类厂商自定义设备（列表里没有 CH340，或能 `open` 却收不到任何数据），而且弹出过的串口选择框会消耗用户手势，让随后的 `navigator.usb.requestDevice()` 抛 `SecurityError`。只有连 `navigator.usb` 都不存在时，才会退回 Web Serial（此时也没有别的选择）。因此安卓上默认通过 **WebUSB** 访问 CH340/CH341 写频线（实现见 `src/utils/webusb-ch341.js`，逻辑对齐 Linux `ch341.c`）。桌面的连接方式不变，仍然是 Web Serial。
-
-**使用条件：**
-
-- 安卓 Chrome（建议 152 及以上；更旧的版本可能没有可用的 `navigator.usb`）
-- 站点需 HTTPS
-- 手机支持 USB Host，使用 OTG 线连接 CH340（`1a86:7523`）写频线
-- 系统内核**不能**已占用该 USB 串口设备
-
-**已知限制：**
-
-- **实验性功能**：不同机型/ROM 差异大，可能出现 `claimInterface` 失败（内核 ch341 驱动已绑定）、偶发传输错误或握手超时
-- 仅针对沁恒 CH340/CH341 系列；CP210x / FTDI / PL2303 线材未实现
-- 长时间刷固件请保持页面前台，避免安卓后台节流
-- 问题反馈请附：手机型号、安卓版本、Chrome 版本、写频线芯片、控制台日志
-
-诊断工具：仓库根目录 `android-webusb-ch341.html` 可单独用于验证手机能否通过 WebUSB 连接电台。
-
-## 讨论
-- QQ 群：957225277  （K5Web相关）
-- QQ 群：201308015  （固件相关）
-- Telegram Group: https://t.me/losehu
-- Matrix Group: https://matrix.to/#/#losehu:mozilla.org
+- **完全离线**：Web 应用整体打包进 APK，打开即用，不依赖外网
+- **OTG 直连写频**：原生 K5Bridge USB 串口桥驱动 CH340/CH341 写频线，功能与桌面版一致
+- **手机/电脑版切换**：原生悬浮按钮（📱/🖥️ 图标），一键切换视口与 UA，支持拖拽换位，尺寸不随页面缩放
+- **深色模式跟随系统**：每次冷启动重新检测系统深浅色，不残留手动偏好
+- **横屏伪全屏**：开机图片等横屏编辑场景自动进入沉浸式横屏
+- **卫星定位兜底**：无网络时定位自动切换 GNSS（卫星）方案，星历写入、扫码定位均可离线使用
+- **星历本地缓存**：星历获取成功后自动保存到应用内部存储，可一键"导入上次星历"
 
 ## 功能列表
 
-- 固件版本检测
-- EEPROM 大小检测
-- 信道管理
-- 启动画面文字管理
-- MDC 本地侧音控制（仅支持我的 LTS 固件）
-- 备份/还原 EEPROM
+- 固件版本 / EEPROM 大小检测
+- 信道管理（手机版表格分页已适配）
+- 备份 / 还原 EEPROM（快速 / 完整 / 清空，含读超时自动重试）
 - 固件升级
-- 开机图片（LOSEHU 固件）
-- 字库写入（LOSEHU 固件）
-- 星历写入（LOSEHU 固件）
-- DTMF ID 设置
-- 收音机频道管理
-- MDC 联系人管理（LOSEHU 固件）
+- 开机图片读取与写入（LOSEHU 固件）
+- 字库写入、星历写入（LOSEHU 固件）
+- 启动画面文字管理
+- MDC 联系人管理、本地侧音控制
+- DTMF ID 设置、收音机频道管理
+- 卫星过境预测 / 多普勒频移计算（星历写入配套）
 
-## 开发
-### 安装依赖
-```
+## 安装
+
+1. 从 [Releases](https://github.com/twjhurt/k5_app/releases) 下载最新 APK（如 `K5Web-android-1.0.17.apk`）
+2. 允许安装未知来源应用后直接安装（minSdk 26 / targetSdk 34，Android 8.0+）
+3. 所有版本**同签名**，可直接覆盖安装升级，无需卸载旧版
+4. 使用时用 OTG 线连接 CH340 写频线与手台，打开应用选择串口设备即可
+
+详细版本变更记录见 [README-ANDROID.md](./README-ANDROID.md)。
+
+## 从源码构建
+
+### 环境
+
+- Node.js 18+（推荐使用 npmmirror 镜像）
+- JDK 17、Android SDK（`tools/` 目录提供本地构建工具链，不入库）
+- Windows + PowerShell（APK 打包脚本）
+
+### Web 构建
+
+```bash
 npm install
+npm run build   # 产物输出至 dist/
 ```
-### 开发
+
+### APK 打包
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\android\build.ps1 -VersionName 1.0.17 -VersionCode 18
 ```
-npm run dev
+
+流程：`vite build` → 同步 `dist/` 到 `android/assets/www/`（含注入桥 `k5-bridge.js`）→ `javac` 编译原生层（`MainActivity.java` WebView 壳 + `K5Bridge.java` USB 串口桥）→ `apksigner` 签名（密钥库默认 `android/build/k5web.keystore`，密码从环境变量 `K5WEB_KS_PASS` 或本地 `android/build/ks.pass.txt` 读取）→ 产物输出至 `release/`。
+
+> 密钥库与密码文件均被 `.gitignore` 排除，**不会**进入仓库；首次本地构建会自动生成新密钥库（注意：与官方发布的 APK 签名不同，无法覆盖安装 Release 版本）。
+
+## 项目结构
+
 ```
-### 编译
+├── src/                    # Web 应用源码（Vue 3 + Arco Design / TDesign）
+│   └── utils/
+│       ├── serial.js       # 串口协议层（EEPROM 读写、固件刷写）
+│       ├── webusb-ch341.js # 安卓 WebUSB CH341 驱动
+│       └── location.js     # 统一定位入口（网络定位 + 卫星兜底）
+├── android/
+│   ├── java/com/k5web/app/ # 原生层：MainActivity（WebView 壳）、K5Bridge（USB 桥）
+│   ├── bridge/k5-bridge.js # 注入页面的 JS 桥（navigator.usb shim 等）
+│   ├── assets/www/         # dist 构建产物同步目标（不入库）
+│   └── build.ps1           # APK 打包脚本
+├── release/                # 各版本 APK 产物（已入库并发布至 Releases）
+└── README-ANDROID.md       # 安卓版详细变更记录
 ```
-npm run build
-```
+
+## 讨论（上游社区）
+
+- QQ 群：957225277（K5Web 相关）
+- QQ 群：201308015（固件相关）
+- Telegram: https://t.me/losehu
+- Matrix: https://matrix.to/#/#losehu:mozilla.org
 
 ## 关联项目
-### 星历计算接口：
-    https://github.com/silenty4ng/k5sat
 
-### 我的固件：
-    https://github.com/silenty4ng/uv-k5-firmware-chinese-lts 
+- 星历计算接口：https://github.com/silenty4ng/k5sat
+- LTS 固件：https://github.com/silenty4ng/uv-k5-firmware-chinese-lts
 
 ## 感谢项目
+
 - https://github.com/whosmatt/uvmod
 - https://github.com/egzumer/uvtools
 - https://github.com/losehu/uv-k5-firmware-custom
@@ -110,12 +123,3 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=silenty4ng/k5web&type=Date)](https://star-history.com/#silenty4ng/k5web&Date)
-
-## 饿饿饭饭
-<img src="https://github.com/silenty4ng/k5web/blob/master/public/mm_facetoface_collect_qrcode_1714392837792.png?raw=true"  width="300" /> <img src="https://github.com/silenty4ng/k5web/blob/master/public/1722745910257.jpg?raw=true"  width="300" />
-
-TRON / TRX：TPaSnHJ2cRCQjjv7TyAFJDamb3mZSSz1At
