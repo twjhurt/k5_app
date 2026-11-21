@@ -1,4 +1,5 @@
 # K5Web 安卓离线版
+**请注意：不建议使用本应用来刷写固件！因为：①手机的数据口和写频线的连接稳定性无法保证②本项目完全vibecoding！本人没有代码基础，无法对项目负责！**
 
 基于开源项目 [K5Web](https://github.com/silenty4ng/k5web)（UV-K5/K6 写频 Web 应用）构建的**安卓离线版**：将完整 Web 应用打包为单个 APK，内置站点资源，无需网络即可运行，并通过原生 USB 桥驱动 CH340/CH341 写频线（OTG）连接手台，实现写频、备份、固件升级等全部功能。
 
@@ -10,8 +11,7 @@
 - **OTG 直连写频**：原生 K5Bridge USB 串口桥驱动 CH340/CH341 写频线，功能与桌面版一致
 - **手机/电脑版切换**：原生悬浮按钮（📱/🖥️ 图标），一键切换视口与 UA，支持拖拽换位，尺寸不随页面缩放
 - **深色模式跟随系统**：每次冷启动重新检测系统深浅色，不残留手动偏好
-- **横屏伪全屏**：开机图片等横屏编辑场景自动进入沉浸式横屏
-- **卫星定位兜底**：无网络时定位自动切换 GNSS（卫星）方案，星历写入、扫码定位均可离线使用
+- **横屏伪全屏**：开机图片等横屏编辑场景自动进入沉浸式横屏（说实话，我不知道AI为什么会写这么个东西，实际上我没体验到）
 - **星历本地缓存**：星历获取成功后自动保存到应用内部存储，可一键"导入上次星历"
 
 ## 功能列表
@@ -78,7 +78,7 @@ powershell -ExecutionPolicy Bypass -File .\android\build.ps1 -VersionName 1.0.17
 └── README-ANDROID.md       # 安卓版详细变更记录
 ```
 
-## 讨论（上游社区）
+## 讨论（上游社区，本仓库未搭建讨论社区！）
 
 - QQ 群：957225277（K5Web 相关）
 - QQ 群：201308015（固件相关）
@@ -89,6 +89,8 @@ powershell -ExecutionPolicy Bypass -File .\android\build.ps1 -VersionName 1.0.17
 
 - 星历计算接口：https://github.com/silenty4ng/k5sat
 - LTS 固件：https://github.com/silenty4ng/uv-k5-firmware-chinese-lts
+- k5web：https://github.com/silenty4ng/k5web
+- k5web（他人fork支持手机版）： https://github.com/wty2019wty/k5web
 
 ## 感谢项目
 
@@ -99,12 +101,12 @@ powershell -ExecutionPolicy Bypass -File .\android\build.ps1 -VersionName 1.0.17
 - https://github.com/fagci/uvk5-manager
 - https://github.com/hank9999/K5_Tools
 - https://github.com/kk7ds/chirp
+- https://github.com/silenty4ng/k5web
+- https://github.com/wty2019wty/k5web
 
 ## 开源协议
 
 ```
-Copyright (c) 2024 Silent YANG
-
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
