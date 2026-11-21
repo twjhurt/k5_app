@@ -1,5 +1,9 @@
 <template>
   <div class="container">
+    <t-message v-if="ephState.fetching" theme="loading" class="midMessage">
+      <span>正在联网获取星历</span>
+      <a-link theme="primary" style="margin-left: 12px;" @click="cancelFetchEphemeris">终止获取</a-link>
+    </t-message>
     <a-modal width="650px" class="self-sat-modal" v-model:visible="state.selfSatModal" @ok="addSelfSat">
       <template #title>
         {{ $t("sat.selfSatInfo") }}
@@ -295,6 +299,17 @@ const changeSat = async (sat: any) => {
   })
 }
 
+// 星历联网获取提示窗状态与中止控制器
+const ephState = reactive({ fetching: false });
+let ephAbort: AbortController | null = null;
+const cancelFetchEphemeris = () => {
+  if (ephAbort) {
+    const ctrl = ephAbort;
+    ephAbort = null;
+    ctrl.abort();
+  }
+}
+
 const initSat = async () => {
   setLoading(true)
   try {
@@ -304,7 +319,26 @@ const initSat = async () => {
     if (cached) {
       rst = cached
     } else {
-      rst = await (await fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=json')).text()
+      // 联网获取前检测网络：无网络则提示且不发起请求
+      if (!navigator.onLine) {
+        Message.error('无网络无法获取星历')
+        return
+      }
+      ephState.fetching = true
+      ephAbort = new AbortController()
+      try {
+        rst = await (await fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=json', { signal: ephAbort.signal })).text()
+      } catch (err: any) {
+        // 用户点击"终止获取"：关闭提示窗并恢复状态，不再走后续解析
+        if (err && (err.name === 'AbortError' || ephAbort === null)) {
+          Message.info('已终止获取星历')
+          return
+        }
+        throw err
+      } finally {
+        ephState.fetching = false
+        ephAbort = null
+      }
     }
     const ommList = parseGpJson(rst)
     // 仅在解析出有效数据时写入缓存，避免把限流/错误页缓存后整段会话无法恢复
@@ -601,6 +635,14 @@ export default {
 </script>
 
 <style scoped lang="less">
+.midMessage {
+  position: fixed;
+  top: 20%;
+  z-index: 99;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 .container {
   padding: 0 20px 20px 20px;
 
