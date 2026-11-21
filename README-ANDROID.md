@@ -1,0 +1,320 @@
+# K5Web 安卓离线版（APK）
+
+把仓库里的 K5Web（UV-K5/K6 写频 Web 应用）整合成一个**可离线运行、能通过 OTG 连接手台**的安卓安装包。
+
+- 安装包：`release/K5Web-android-1.0.17.apk`（3.93 MB，已签名，minSdk 26 / targetSdk 34）
+- SHA-256：`EA3C96E813E560E1BBB986FE23BD40808DBF8470FE481B21C357FA18FBF7C188`
+- 应用名：K5Web 写频
+- 版本：versionCode 18 / versionName 1.0.17（同签名，可直接覆盖安装旧版）
+
+## v1.0.17：定位失败自动切换卫星定位
+
+1. **原生**（`K5Bridge.java` 新增 `getLocation`）：走系统 LocationManager
+   获取 GNSS（卫星）定位——5 分钟内有最近位置直接返回（离线可用）；
+   否则 GPS 优先、网络 Provider 并行竞速，首个定位结果胜出；整体超时
+   45 秒。权限未授予 / 定位服务未开启 / 超时分别返回 NotAllowedError /
+   NotAvailableError / TimeoutError；成功结果经既有 `__K5USB.onReply`
+   回调机制回传页面，不占用 USB IO 线程。
+2. **桥**（`k5-bridge.js` 新增 `window.K5GEO.getLocation()`）：复用
+   `call()/onReply()` Promise 机制暴露给页面。
+3. **前端**（新增 `src/utils/location.js` `getCurrentPositionCompat`）：
+   网络正常时仍走 `navigator.geolocation`（原流程、参数、结果不变）；
+   失败时自动调 `K5GEO.getLocation` 卫星兜底；兜底也失败则抛出浏览器
+   原始错误（调用方错误提示文案不变）。返回结构与 Position 兼容。
+4. **调用方**：`sat/index.vue`（浏览器获取经纬度）与 `satloc/index.vue`
+   （手机扫码定位）改用统一定位入口，成功/失败处理逻辑与提示文案不变。
+5. 已端到端验证：浏览器定位失败→卫星坐标正确填入；浏览器定位成功→
+   原结果原样使用；双失败→提示文案保持原样。
+6. 回滚点：改动前原文件备份于 `.workbuddy/backup-{K5Bridge.java,
+   k5-bridge.js,sat-index.vue,satloc-index.vue}-pre-geofallback.*.bak`；
+   新增文件 `src/utils/location.js` 删除即回滚。
+
+## v1.0.16：星历自动保存与"导入上次星历"
+
+1. **自动保存**（`src/views/list/sat/index.vue` `initSat()`）：星历获取成功
+   （celestrak OMM JSON 解析出有效卫星）时，自动把最新星历原文与保存时间
+   写入 `localStorage` 键 `k5webLastEphemeris`（WebView 内部存储，关闭应用
+   不清除；无有效数据/请求失败不覆盖旧存档）。
+2. **导入按钮**："星历写入"页"添加我的卫星"右侧间隔 16px 新增
+   "导入上次星历"按钮。点击读取最近一次保存的星历并填充卫星下拉列表，
+   弹出提示"已成功导入*保存的星历"（* 为实际保存时间，格式
+   `2026.11.21 11:24:00`）；无存档或数据无效时给出相应警示。
+3. 已实测：获取成功自动落盘（保存时间正确记录）、导入提示与卫星列表
+   填充均正常。改动仅涉及 `src/views/list/sat/index.vue` 一个文件；
+   修改前原文件备份于 `.workbuddy/backup-sat-index-pre-ephemeris.vue.bak`。
+
+## v1.0.15：修复手机版分页页码显示不全
+
+1. **原因**：TDesign `.t-pagination` 默认 `flex-wrap: nowrap`，手机视口下
+   分页部件（总条数 + 条/页选择器 + 上一页 + 页码 1~5 + 省略号 + 末页 +
+   下一页 + 跳页框）总宽约 450px，超出 312px 容器后被硬裁——第 4 页之后的
+   页码、末页和"跳至"输入框完全不可见。影响信道管理/信令码/DTMF/收音机
+   等所有带分页的表格页。
+2. **修复**（仅 `src/assets/style/mobile.less`，992px 断点内）：
+   - `.t-pagination, .arco-pagination` 增加 `flex-wrap: wrap; row-gap: 8px`，
+     分页部件换行成 2~3 行，全部控件完整可达；
+   - `.t-table__pagination` 限 `max-width: 100%`；
+   - 页码数字按钮窄屏下收紧为 `min-width: 28px`，减少换行行数。
+3. **验证**（puppeteer 实测）：360px 视口下分页条三行完整显示（当前页、
+   相邻页 1-5、省略号、末页 14、上下页、条/页、总条数均可见，右缘最大
+   312px < 容器 336px）；390px / 320px 亦无溢出；桌面端 1440px 单行 32px
+   不变。
+
+## v1.0.14：修复手机版"信道管理"表格显示不全
+
+1. **原因**：`mobile.less` 里全局 `.t-table { min-width: 720px }` 把 TDesign 表格
+   根元素强制撑到 720px（手机视口只有 390px）；页面级 `overflow-x: hidden` 直接
+   把超出的右侧 ~354px 裁掉，横向滚动条（挂在 `.t-table__content` 上）也随之
+   不可见——21 列的信道管理表只剩"排序 / # / 信道名称"三列，其余完全无法查看。
+2. **修复**：改为 `min-width: min(720px, 100%); max-width: 100%`——宽父容器下
+   仍保持 720px 可读下限；窄屏下根元素收缩到父容器宽度，由 `.t-table__content`
+   （overflow-x: auto）承担横向滚动，全部列可达、滚动条可见。
+3. **波及面排查**：同样使用 t-table 的信令码（mdc）、DTMF、收音机（radio）、
+   卫星（sat2）、bl、chat 页一并修复；实测 390px 视口下上述页面
+   `document.scrollWidth` 均为 390（无页面级横向溢出），表格根元素全部收进视口。
+   备份页三个页签的工具栏按钮均完整可见；桌面端（≥992px）规则不生效，实测
+   表格宽度 1140px 无变化。
+
+## v1.0.13：修复完整备份中途"readPacket 超时（已收 48B）"
+
+现象：完整备份进行到某个包时 `readPacket(0x1c)` 超时，缓冲区里是
+`ab cd 48 00 …`（共 48B）——这其实是 0x40 读请求的标准回复帧（0x48 负载 =
+8B 包头 + 64B 数据，整帧 80B），只是**只收到了前 48 字节，中段丢了 32 字节**
+（约等于 CH340 内部 RX 缓存深度）。原生读线程在帧中途短暂停顿（GC/线程调度/
+忙页面上的 evaluateJavascript 排队）时，CH340 约 8.3ms 即灌满溢出，中间一整段
+字节被硬件丢弃；完整备份连续 8192 次来回 + 逐次追加进度 HTML 让页面越来越忙，
+放大了停顿概率。修复三件套：
+
+1. **读超时自动重试**：`eeprom_read` 拆为 `eeprom_read_once` + 外层重试（最多
+   3 次尝试）。读操作幂等，重发同一地址的读请求即可恢复，不再让整个备份因
+   一次超时中断；重试日志输出到状态诊断（"清理残留后重发读请求"）。
+2. **重试前清理残留**：新增 `drainStaleRx(port)`——反复读取直到拿不到新字节
+   （含迟到的尾包），丢弃上一帧残尾，保证下一帧从帧头解析、不错位。
+3. **降低页面负载**：备份进度只在整数百分比变化时写一次 `state.status`
+   （原为每包一次，512KB 备份写 8192 次）；状态区总长度超 15 万字符时自动
+   截断最早 25%。清空/恢复进度同样改走截断入口。
+
+## v1.0.12：首页删除维护期限文案与 Microsoft Store 徽章
+
+1. 删除首页（/chirp/base）说明区最后一行："◆ 感谢各位对 K5Web 的支持，本站将至少
+   维护至 2026年11月21日 23:59:59。"（含指向 /#/chirp/thanks 的"各位"链接）。
+2. 删除说明区下方的 Microsoft Store 徽章整段（a 链接 apps.microsoft.com/detail/
+   9pb0w69f5dp6 + get.microsoft.com 深色徽章图片），连带移除仅被其引用的
+   getLang() 函数。
+3. 其余文案、样式、功能均不变。
+
+## v1.0.11：完整备份前置校验 EEPROM 大小
+
+1. **前置校验**：小工具 → 备份 → "完整备份"页签，未在"选择 EEPROM 大小"下拉框中
+   选择大小时点击"备份"，立即阻止备份流程——不发起串口读取、不生成备份文件，
+   并弹出提示窗"您未选择EEPROM大小！"。
+2. **提示窗样式**：与首次打开"小工具 → 固件升级"时的提示窗完全一致（TDesign
+   DialogPlugin，danger 主题、标题"提示"、按钮"我知道了"、无取消/关闭按钮，
+   点遮罩或按 Esc 均不关闭，仅点"我知道了"关闭）。
+3. 已选择 EEPROM 大小时"备份"行为不变，按所选大小正常执行完整备份。
+
+## v1.0.10：深色模式每次重开都重新检测系统
+
+1. **每次重新打开应用检测**：此前手动切换过的主题偏好会持久化并在每次启动时
+   优先于系统配色——只要手动切换过一次，重开就永远不再跟随系统。现在 APK 内
+   k5-bridge.js 每次冷启动清除遗留的手动偏好（`arco-theme`），本次深浅仅由
+   原生 `isSystemDark()`（兜底 `prefers-color-scheme`）判定；手动切换仅在本次
+   会话内有效，跨启动一律跟随系统。桌面网页版行为不变（手动偏好仍持久化）。
+2. **防覆盖**：navbar 的 useDark 无存储偏好时以 store 当前主题为初始值，修复部分
+   机型 matchMedia 失效导致 navbar 挂载时把桥接层已设好的暗色覆盖回浅色的问题。
+3. 深色链路整体（此前版本已建立，本次复核完好）：values-night 深色 Activity 主题
+   → WebView prefers-color-scheme 正确；桥接脚本先于一切 CSS 注入原生检测结果并
+   立即设置 html[theme-mode]，loading 遮罩同步变暗（零白闪）；运行中系统深浅色
+   切换由 onConfigurationChanged → k5usb:system-theme 事件实时推送跟随。
+
+## v1.0.9：悬浮按钮图标化 + 支持拖动换位
+
+1. **图标化**：按钮改为 52dp 圆形，文字替换为简洁图标——📱 表示当前手机版、
+   🖥️ 表示当前电脑版（图标体现当前模式状态，点按即切换到另一模式）。
+2. **拖动换位**：按住拖动实时跟手（超过系统触摸阈值 touchSlop 进入拖拽并振动
+   反馈），边界内钳制，松手停在最终位置（不吸附）；位移未超阈值视为点击。
+   拖动位置仅当前会话有效——重启回到默认右下角，与"退出不保存历史状态"一致。
+3. 切换功能不变：仍走热切换链路（原生 UA/宽视口 + 页面 meta viewport 现场改写，
+   无 reload、无白屏）。
+
+## v1.0.8：退出不保存状态 + 切换按钮移至应用层
+
+1. **不保存/不恢复历史状态**：删除 WebView 的 saveState/restoreState——每次冷启动
+   都从首页开始，不恢复上次浏览的页面历史；视口模式（手机/电脑版）改为只保存在
+   原生内存字段中，应用退出即结束，重新打开一律回到手机版（会话内页面 reload /
+   WebView 崩溃重建时当前模式仍保留）；启动时顺带清理旧版本写入 localStorage 的
+   `k5-viewport-mode`、`k5-fab-pos` 历史键。主题与语言等用户偏好不受影响。
+2. **切换按钮移到应用层**：删除网页内的悬浮按钮组件，MainActivity 在 WebView 之上
+   叠加原生 TextView 药丸按钮（右下角固定、跟随导航栏 inset），文案显示"将要切换到"
+   的模式（切换电脑版 ⇄ 切换手机版）。原生控件位于 WebView 窗口之外，页面缩放/
+   布局变化不影响按钮尺寸——彻底解决电脑版下按钮随页面缩小、需要 CSS 反向放大
+   的问题。点击仍走原热切换链路（原生 UA/宽视口 + 现场改写 meta viewport，无
+   reload、无白屏）。伪全屏编辑时自动隐藏按钮，退出后恢复。
+
+## v1.0.7：悬浮按钮支持拖拽换位 + 快速切换加固
+
+1. **拖拽换位**：悬浮按钮支持鼠标与触控拖拽（Pointer Events 统一处理，
+   `touch-action: none` 防止拖拽时触发页面滚动），松手水平吸附到最近的左右边缘；
+   位置以"可用区域比例"存 localStorage（`k5-fab-pos`）——手机/电脑版布局宽度剧变后
+   按钮仍保持相对位置不跳位。位移 < 8px 判定为点击（切换模式），≥ 8px 判定为拖拽，
+   拖拽中放大 + 振动反馈，不影响切换功能与页面操作。
+2. **快速切换加固**：`applyViewportMeta` 改为每次调用都强制重写 meta viewport
+   （不再按标记跳过），快速来回切换无旧布局残留；新增设备宽缓存 `__K5_DEVICE_W__`
+   （手机模式下记录真实宽度），修复快速连点回桌面模式时 `initial-scale` 因
+   `innerWidth` 滞留 1024 而算错、页面只显示左上角一角的问题。
+3. 切换仍为热切换（无 reload）：按下缩放、拖拽振动、松手吸附动画、图标即时更新。
+
+## v1.0.6：视口切换按钮移至右下角悬浮 + 热切换无白屏
+
+1. **悬浮按钮**：切换按钮从导航栏移到页面右下角悬浮（`viewport-fab` 组件，挂在
+   App.vue 全局，无导航栏的页面如 /satloc 也可见），电脑版视图下按钮按页面缩放比例
+   放大保持可点面积。
+2. **热切换（无白屏卡顿）**：v1.0.5 的切换靠 `webView.reload()`，整页重载有白屏和
+   等待。现在切换不再 reload——原生只即时切换 UA 与宽视口设置，k5-bridge.js 现场改写
+   meta viewport（电脑版 `width=1024, initial-scale=设备宽/1024`，切过去即是整页概览，
+   捏合自由缩放；手机版恢复原 meta），Chromium 即时重算布局，全程无白屏。选择仍持久
+   化（localStorage），冷启动自动应用。
+
+## v1.0.5：修复无法获取定位、电脑版视图真正生效
+
+1. **定位（geolocation）**：根因是双缺失——Manifest 未声明定位权限，且 WebChromeClient
+   未实现 `onGeolocationPermissionsShowPrompt`（WebView 默认全部拒绝）。现在：声明
+   `ACCESS_FINE_LOCATION/COARSE_LOCATION`；页面请求定位时检查运行时权限，未授予则弹
+   系统授权框，结果回调给 WebView；satloc / 卫星页面的 `getCurrentPosition` 增加错误
+   回调（权限拒绝 / 定位服务关闭分别提示），不再静默失败。注意设备需开启系统定位服务。
+2. **电脑版视图**：v1.0.3 的切换按钮链路（UA + wide viewport + reload）虽在，但页面
+   `<meta name="viewport" content="width=device-width">` 优先级高于
+   `setUseWideViewPort(true)`，布局宽度仍是手机宽——切了没反应。现在 k5-bridge.js 在
+   应用视口模式时同步改写 meta viewport：电脑版固定 `width=1024` + 可捏合缩放（桌面
+   UA + 桌面布局），手机版恢复原始 meta。选择持久化（localStorage），冷启动自动应用。
+
+## v1.0.4：修复 USB 串口无法通讯（点连接提示"浏览器不支持"）
+
+**根因**：v1.0.3 起页面首屏引导脚本的注释里出现了 "k5-bridge.js" 字样（深色判定
+注释），`MainActivity.injectBridgeScript` 的守卫用裸字符串 `html.contains("k5-bridge.js")`
+判断"是否已注入"，被注释文字误命中——桥接脚本标签从未真正插入 `<head>`，
+WebView 里没有 `navigator.usb` 兼容层，`serial.js` 判定环境不支持，点连接直接
+弹"当前浏览器不支持网页串口/USB 串口功能"。1.0.2 及更早版本引导脚本无此注释，
+所以此前串口正常。
+
+**修复**：守卫改为正则匹配真正的 `<script src="...k5-bridge.js">` 标签，并已通过
+Node 仿真（mock 原生桥 + 真实 k5-bridge.js + 真实 webusb-ch341.js）验证连接 →
+CH340 初始化 → 写读回全链路字节一致。
+
+## v1.0.3：深色跟随加固、手机版/电脑版切换、读取开机图片、横屏全屏修复
+
+1. **深色模式跟随系统（根修）**：AppTheme 的 parent 固定为 Light 主题时，Activity 的
+   night 模式永远是 notnight，WebView 的 `prefers-color-scheme` 因此恒报 light，
+   页面引导脚本（matchMedia）完全失效。现新增 `values-night/styles.xml`（深色
+   parent），系统深色时 Activity 进入 night 模式 → WebView 媒体查询正确 → 首屏即暗。
+   同时 `k5-bridge.js`（注入在 `<head>` 最前）在读取原生 `isSystemDark()` 后**立即**
+   应用 `html[theme-mode=dark]`，loading 遮罩阶段就是暗色，零闪烁；`MainActivity` 在
+   `onConfigurationChanged`（manifest 含 uiMode，不重建）把系统深浅色变化实时推给
+   页面，用户未手动固定主题时跟随切换。
+2. **手机版 ⇄ 电脑版切换**：navbar 新增切换按钮（仅 APK 内显示），切换桌面 UA +
+   wide viewport + overview（页面自动适配桌面布局），可自由捏合缩放；选择存
+   localStorage，冷启动由 k5-bridge.js 静默应用，无需二次 reload。
+3. **从设备读取当前开机图片**（小工具 → 开机图片）：地址与协议分支与写入逻辑完全
+   一致——official（0x3000 头校验后读 0x3008）、losehu（0x1E350）、gb2312（0x2080）、
+   UVE+gb2312（shared 区 0x0080）。读取后解码 1024 字节为 128×64 矩阵，编辑器内直接
+   预览并弹窗大图，可保存到用户指定目录（走统一"另存为"）；失败有明确错误提示
+   （未连接 / 固件不支持 / 无有效图片标志 / 通信异常分别提示）。
+4. **横屏全屏编辑修复**：根因是安卓 WebView 未实现 `onShowCustomView`，元素级
+   Fullscreen API 必然失败且最长空等 800ms。现在 APK 宿主点击「横屏全屏编辑」
+   **直接进入**原生沉浸式横屏伪全屏（隐藏系统栏 + SENSOR_LANDSCAPE），立即生效；
+   权限弹窗等导致窗口重获焦点后自动重新应用沉浸式标志；返回键先退出全屏而非回退
+   页面历史；桌面浏览器行为不变。
+
+## v1.0.2：主题跟随系统、USB 选择框自动连接、下载统一走"另存为"
+
+1. **深色模式首屏跟随系统**：`index.html` 在任何 CSS 渲染前同步读取用户偏好
+   （localStorage `arco-theme`）或系统配色（`prefers-color-scheme`），暗色时先给
+   `<html>` 打 `theme-mode=dark`（TDesign）、body 就绪立即打 `arco-theme=dark`
+   （Arco），加载遮罩同步变暗——首屏不再白闪。store 新增 `initTheme()`，挂载前
+   与引导脚本同优先级初始化，无 navbar 的页面（如 `/satloc`）也能正确变暗；
+   用户未手动固定主题时，系统配色变化实时跟随。
+2. **USB 设备选择框自动连接**：插上写频线弹出「为USB设备选择一个应用」时本应用
+   在列表中；选中后（无论冷启动还是已在运行）MainActivity 接收
+   `USB_DEVICE_ATTACHED` Intent，页面就绪后经 `K5Bridge.autoAttachDevice()` 申请
+   权限并推送 vid/pid 到页面，navbar 自动执行与手动点「连接」完全相同的流程
+   （open → eeprom 握手 → 固件识别 → 驱动配置）。已连接时保持现有会话不重连。
+   首次授权弹一次系统权限框（可勾选始终允许），之后全自动。
+3. **下载/保存统一先选目录**：全部 9 处下载点（EEPROM 备份×2、自定义固件、
+   固件库、信道库、开机图片、channel.json、模板 xlsx、导出 xlsx）统一走
+   `src/utils/download.ts`：APK 内弹系统「另存为」对话框指定目录；取消则不保存、
+   不回退默认目录。桌面 Chromium 走 `showSaveFilePicker`，同样取消即中止。
+   `k5-bridge.js` 暴露 `window.__K5USB.saveBlob` 供页面直接调用，并保留
+   `<a download>` 拦截作为兜底。原 image 页 data URL 直下、模板 xlsx 同源直下
+   这两个在 WebView 里会静默失败的路径也已修复。
+
+## v1.0.1：串口吞吐修复
+
+1.0.0 的桥接是「一个 USB 包一次 JS↔Java 往返」：读 32B 就要发一次 `transferIn`，再经 UI 线程
+`evaluateJavascript` 回包；写一帧要按 32B 切十几到几十次 `transferOut`。而 CH340 在 38400 波特下
+每 32 字节只有约 8.3ms 的间隔，这点往返开销直接把有效带宽吃掉，还会让 CH340 的 32B FIFO 溢出。
+
+1.0.1 改成：
+
+- **读**：原生读线程常驻 `bulkTransfer`，空闲后的首包立即下发（小响应零额外延迟），连续数据流按
+  12ms 帧尾空隙 / 2048B 成批推送（`onData`）；JS 侧只从本地队列取数，不再逐包过桥。
+- **写**：JS 一帧只调用一次 `transferOut`，由原生按 256B 分片循环下发。
+- 端点描述符把批量端点窗口改成 IN 1024 / OUT 4096（真实 USB 包仍是 32B，只是不再由 JS 切片）。
+- 原生流式读启用后，`serial.js` 里每帧写完后那 8ms 的「等读循环重新挂起」延迟不再需要。
+
+## 安装与使用
+
+1. 把 APK 传到手机，点击安装（需允许「安装未知来源应用」）。
+2. 用 **OTG 转接线**连接 CH340/CH341 写频线，另一头接手台（如 UV-K5），插上后 App 会被自动拉起。
+3. 首次连接时系统会弹出 USB 访问授权，选「允许」（可勾选始终允许）。
+4. 在页面里点「连接」即可读写信道、备份/还原 EEPROM、刷固件等。
+
+支持的 USB 芯片（与网页版一致）：`1a86:7523`、`1a86:7522`、`1a86:5523`、`4348:5523`、`2184:0057`、`9986:7523`。
+
+## 为什么要做原生 USB 桥
+
+安卓 WebView **不提供** WebUSB / Web Serial，所以直接把网页塞进 WebView 是连不上手台的。
+本 APK 做了三件事：
+
+1. **离线资源**：前端用 Vite 构建后整体打进 `assets/www/`，通过自定义虚拟域名 `https://k5.local` + `shouldInterceptRequest` 提供，保持「安全上下文 + ES Module」正常工作，断网也能用。
+2. **原生 USB 桥**：`K5Bridge.java` 用 `UsbManager` 直接做 CH340/CH341 的 control/bulk 传输，`k5-bridge.js` 在页面里补出一个 `navigator.usb`，于是原有的 `src/utils/webusb-ch341.js` **一行不改**就能跑通（CH341 寄存器初始化逻辑仍复用网页版代码）。
+3. **文件读写**：WebView 里 `<a download>` 存 blob 会静默失败，所以接管成系统「另存为」对话框；`<input type=file>` 走系统文件选择器。备份 EEPROM、导出 xlsx、恢复备份都可用。
+
+另外：屏幕常亮、横竖屏切换不重建页面（避免打断 USB 会话）、USB 设备插入自动唤起、长按返回键式返回导航、`window.k5diag()` 可查看 USB 枚举状态。
+
+## 已知限制
+
+- 仅支持 **CH340/CH341** 系列写频线；CP210x / FTDI / PL2303 未实现。
+- 部分机型内核已绑定 ch341 驱动时会报 `claimInterface 失败`，属于系统限制。
+- 固件/星历等**在线**资源仍需网络；离线时只影响这些在线下载功能，写频本身可用。
+- 安卓版本要求 ≥ 8.0（API 26），手机需支持 USB Host（OTG）。
+
+## 构建方法（可复现）
+
+```powershell
+# 1) 前端静态资源（只装构建所需依赖，不装 electron/sharp）
+#    依赖已装在 tools\webbuild\node_modules，仓库根 node_modules 指向它（junction）
+node node_modules\vite\bin\vite.js build --config config/vite.config.apk.ts
+
+# 2) 打 APK（aapt2 + javac + d8 + zipalign + apksigner，不需要 Gradle/Android Studio）
+powershell -ExecutionPolicy Bypass -File .\android\build.ps1
+```
+
+产物：`release/K5Web-android-<版本>.apk`。
+
+工具链放在 `tools/`（JDK 17、build-tools 34、android-35 的 android.jar），由 `tools/fetch-toolchain.mjs` 下载。
+
+### 关键实现文件
+
+| 文件 | 作用 |
+|------|------|
+| `android/java/com/k5web/app/MainActivity.java` | WebView 壳、虚拟 https 源、文件选择/另存为、生命周期 |
+| `android/java/com/k5web/app/K5Bridge.java` | 原生 USB（枚举、权限、control/bulk 传输、端点描述符） |
+| `android/bridge/k5-bridge.js` | `navigator.usb` 兼容层 + 下载接管 |
+| `android/build.ps1` | 无 Gradle 的 APK 打包/签名脚本 |
+| `tools/ZipFix.java` | 修正 aapt2 在 Windows 上把 assets 条目名写成反斜杠的问题 |
+| `tools/test-bridge.mjs` | 用假 CH340 设备跑真实驱动代码的协议测试 |
+
+### 签名
+
+自签名证书在 `android/build/k5web.keystore`（alias `k5web`，口令 `k5web2024`）。
+**以后发新版必须用同一个 keystore 签名**，否则无法覆盖安装。

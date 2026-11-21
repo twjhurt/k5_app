@@ -1,0 +1,99 @@
+<template>
+    <div class="container">
+        <div style="background-color: #fff; padding: 10%;" v-show="state.type != 0">
+            请点击网页“已扫码上传”按钮 <br>
+            Please click on the "Scanned and Uploaded" button on PC page.
+        </div>
+        <div style="background-color: #fff; padding: 10%;" v-show="state.type == 0">
+            <p style="font-size: 1.5rem; font-weight: bold;">
+                获取信息（Information）
+            </p>
+            <a-divider />
+            <p>
+                台站经度（Longitude）：{{ state.lng }}
+            </p>
+            <a-divider />
+            <p>
+                台站纬度（Latitude）：{{ state.lat }}
+            </p>
+            <a-divider />
+            <p>
+                台站海拔（Altitude）：{{ state.alt }}
+            </p>
+            <a-divider />
+            <a-button type="primary" @click="upload">上传（Upload）</a-button>
+        </div>
+    </div>
+</template>
+  
+<script lang="ts" setup>
+import { reactive, nextTick, onMounted, onUnmounted } from 'vue';
+import { Message } from '@arco-design/web-vue';
+import { useAppStore } from '@/store';
+import useLoading from '@/hooks/loading';
+import { getCurrentPositionCompat } from '@/utils/location.js';
+
+const state : {
+    lat: number,
+    lng: number,
+    alt: number,
+    type: number,
+    uuid: string | null
+} = reactive({
+    lat: 0,
+    lng: 0,
+    alt: 0,
+    type: 0,
+    uuid: ''
+})
+
+onMounted(()=>{
+    state.uuid = (new URLSearchParams(location.hash.replace("#/satloc?", ""))).get("uuid");
+    // 网络正常时沿用原有浏览器定位；无网络/网络定位失败时自动切换卫星定位兜底
+    getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000 }).then((e) => {
+        if (e.coords) {
+            state.lat = e.coords.latitude
+            state.lng = e.coords.longitude
+            if (e.coords.altitude) state.alt = e.coords.altitude
+        }
+    }).catch((err) => {
+        if (err && err.code === err.PERMISSION_DENIED) {
+            Message.error('定位失败：请在系统设置中允许本应用使用位置权限')
+        } else {
+            Message.error('定位失败：' + (err && err.message ? err.message : '请检查设备定位服务是否开启'))
+        }
+    })
+})
+
+const upload = async () => {
+    await fetch('https://k5.vicicode.cn/api/lol', {
+        method: "POST",
+        mode: "cors",
+        headers: {
+        "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            func: 0,
+            uuid: state.uuid,
+            cache: JSON.stringify([state.lng, state.lat, state.alt])
+        })
+    });
+    state.type = 1
+}
+
+</script>
+  
+<script lang="ts">
+export default {
+    name: 'SatLoc',
+};
+</script>
+
+<style scoped lang="less">
+.container {
+    background-color: rgb(242, 243, 245);
+    width: 100%;
+    min-height: 100vh;
+    padding: 10%;
+}
+</style>

@@ -1,0 +1,612 @@
+// Mobile overrides for Android Chrome portrait (360–430px).
+// Base shared primitives live in ui.less; this file only ships breakpoint overrides.
+// Keep desktop intact; all rules live inside max-width media queries.
+
+// Must stay aligned with hooks/responsive.ts WIDTH (992) — CSS is max-width so use WIDTH-1.
+@mobile-max: 991px;
+
+// ---------- shared helpers ----------
+.mobile-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-full-width {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+// ---------- shell ----------
+@media screen and (max-width: @mobile-max) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
+  body {
+    font-size: 14px;
+    overscroll-behavior-y: contain;
+  }
+
+  button,
+  a,
+  .arco-btn,
+  .t-button,
+  .arco-menu-item,
+  .arco-tabs-tab {
+    touch-action: manipulation;
+  }
+
+  .container {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    max-width: 100%;
+    overflow-x: visible;
+  }
+
+  .general-card {
+    overflow: visible;
+
+    & > .arco-card-header {
+      padding: 14px 12px;
+    }
+
+    & > .arco-card-body {
+      padding: 0 12px 12px 12px;
+      overflow: visible;
+    }
+  }
+
+  .arco-card-body {
+    overflow: visible !important;
+  }
+
+  .container-breadcrumb {
+    margin: 10px 0 8px;
+    overflow-x: auto;
+    white-space: nowrap;
+
+    .arco-breadcrumb-item {
+      font-size: 12px;
+    }
+  }
+
+  // navbar: keep Connect button on-screen; never clip silently
+  .layout-navbar {
+    .navbar {
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      gap: 0;
+    }
+
+    .left-side {
+      padding-left: 10px;
+      flex-shrink: 0;
+
+      .arco-typography {
+        white-space: nowrap;
+      }
+
+      .arco-space {
+        gap: 8px !important;
+      }
+    }
+
+    .center-side {
+      display: none;
+    }
+
+    .right-side {
+      padding-right: 8px;
+      flex-shrink: 0;
+      margin: 0;
+      padding-left: 0;
+
+      li {
+        padding: 0 4px;
+        flex-shrink: 0;
+      }
+
+      // drop tertiary feedback link so Connect stays visible
+      li:first-child {
+        display: none;
+      }
+
+      .nav-btn {
+        font-size: 14px;
+        min-width: 40px;
+        height: 40px;
+        padding: 0 10px;
+      }
+
+      a.arco-btn,
+      .arco-btn {
+        height: 40px;
+        min-height: 40px;
+        padding: 0 12px;
+        font-size: 13px;
+        white-space: nowrap;
+        max-width: 46vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+  }
+
+  .layout-content {
+    min-height: 100vh;
+    overflow-x: hidden !important;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .layout-sider {
+    width: 260px !important;
+    padding-left: env(safe-area-inset-left, 0);
+  }
+
+  .arco-drawer {
+    max-width: 100vw;
+
+    .arco-drawer-body {
+      padding: 12px;
+    }
+  }
+
+  // DIY / markdown HTML (losehu readme etc.)
+  .readme {
+    pre,
+    code {
+      max-width: 100%;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    table {
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+  }
+
+  // chat message list
+  .chat-log {
+    height: min(500px, 55vh) !important;
+  }
+
+  .chat-msg-row {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+
+    .chat-msg-from {
+      flex-shrink: 0;
+      width: 88px;
+      text-align: right;
+      margin-right: 8px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .chat-msg-body {
+      flex: 1 1 auto;
+      min-width: 0;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  // idea drawer "my list" rows
+  .idea-my-list-row {
+    flex-wrap: wrap !important;
+
+    > .idea-my-list-main {
+      width: 100% !important;
+      max-width: 100% !important;
+      margin-bottom: 8px;
+    }
+
+    > .idea-my-list-side {
+      width: 100% !important;
+      max-width: 100% !important;
+      text-align: left !important;
+      margin: 0 !important;
+    }
+  }
+
+  // tables: allow narrow pages to avoid a forced empty 720px strip
+  .t-table--narrow,
+  .t-table.t-table--narrow {
+    min-width: auto !important;
+  }
+
+  // pixel editor: full 128×64 board always fits the card (handled in ui.less)
+  .pixel-matrix-wrap {
+    padding: 2px;
+  }
+
+  // BL EEPROM map
+  .bl-eprom-map {
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+
+  .bl-eprom-cell {
+    min-height: 20px !important;
+    height: 20px !important;
+    min-width: 12px;
+  }
+
+  .bl-rom-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  // guide steps
+  .guide-steps-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
+  // global setting drawer entrance
+  .fixed-settings {
+    right: 12px !important;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0)) !important;
+    top: auto !important;
+  }
+
+
+  // ---------- layout grid / toolbars ----------
+  .arco-row {
+    flex-wrap: wrap;
+
+    .arco-col,
+    .arco-col-4,
+    .arco-col-12,
+    .arco-col-24 {
+      flex: 0 0 100%;
+      max-width: 100%;
+      min-width: 0;
+      text-align: left !important;
+    }
+  }
+
+  .arco-space {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center;
+    row-gap: 8px !important;
+    column-gap: 8px !important;
+    max-width: 100%;
+    width: auto;
+  }
+
+  .arco-space-item {
+    max-width: 100%;
+  }
+
+  // ensure action buttons are never clipped and remain tappable
+  .arco-btn,
+  .t-button {
+    max-width: 100%;
+  }
+
+  .arco-btn:not(.arco-btn-shape-circle),
+  .t-button:not(.t-is-icon) {
+    white-space: nowrap;
+  }
+
+  // stacked toolbar rows used by list pages
+  .arco-card-header + .arco-card-body > .arco-row,
+  .arco-card-body > .arco-row:first-child {
+    margin-bottom: 12px !important;
+  }
+
+  // ---------- forms ----------
+  .arco-form-item {
+    flex-direction: column;
+    align-items: stretch;
+    margin-bottom: 12px;
+  }
+
+  // Arco labels are right-aligned via flex justify-content, not text-align
+  .arco-form-item-label-col {
+    width: auto !important;
+    flex: none !important;
+    margin-bottom: 4px;
+    text-align: left !important;
+    justify-content: flex-start !important;
+  }
+
+  .arco-form-item-label {
+    justify-content: flex-start !important;
+    text-align: left !important;
+  }
+
+  // TDesign form labels (drawer upload forms, etc.)
+  .t-form__label,
+  .t-form__label--right,
+  .t-form__label--left {
+    text-align: left !important;
+    justify-content: flex-start !important;
+  }
+
+  .arco-form-item-wrapper-col {
+    flex: 1 1 auto !important;
+    width: 100% !important;
+    margin-left: 0 !important;
+    min-width: 0 !important;
+  }
+
+  .arco-input-wrapper,
+  .arco-select,
+  .arco-input-number,
+  .arco-picker,
+  .arco-textarea-wrapper {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .arco-input-number,
+  .arco-picker {
+    width: 100% !important;
+  }
+
+  .arco-select-view {
+    width: 100%;
+  }
+
+  // ---------- modals / drawers / dialogs ----------
+  .arco-modal {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    margin: 0 auto;
+  }
+
+  .arco-modal-body {
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
+    word-break: break-word;
+  }
+
+  .t-dialog {
+    max-width: calc(100vw - 32px) !important;
+    width: calc(100vw - 32px) !important;
+  }
+
+  .t-dialog__body {
+    max-height: calc(100vh - 180px);
+    overflow-y: auto;
+  }
+
+  .arco-image-preview {
+    max-width: 100vw;
+  }
+
+  // ---------- tables ----------
+  .t-table,
+  .t-table__content,
+  .arco-table-container {
+    max-width: 100%;
+  }
+
+  // keep cell text left-aligned on narrow screens
+  .t-table td,
+  .t-table th,
+  .arco-table-td,
+  .arco-table-th,
+  .arco-table-td-align-right,
+  .arco-table-th-align-right {
+    text-align: left !important;
+  }
+
+  // 排序列（拖拽手柄）保持居中；colKey=drag 的 th 类名是 t-table__th-drag
+  .t-table th.t-table__th-drag,
+  .t-table th.t-align-center,
+  .t-table td.t-table__handle-draggable,
+  .t-table td.t-align-center {
+    text-align: center !important;
+  }
+
+  .t-table th.t-table__th-drag .t-table__th-cell-inner {
+    text-align: center !important;
+    justify-content: center !important;
+  }
+
+  .t-pagination,
+  .arco-pagination {
+    justify-content: flex-start !important;
+    // 手机屏宽下分页部件（条/页 + 翻页按钮 + 页码 + 跳至）总宽可达 ~450px，
+    // 超出容器又 nowrap 会导致后半段页码/跳页框被硬裁不可见（页码显示不全）。
+    // 允许换行成两行展示，全部控件可达。
+    flex-wrap: wrap !important;
+    row-gap: 8px;
+  }
+
+  .t-table__pagination {
+    max-width: 100%;
+  }
+
+  // 分页数字按钮在窄屏下略收紧，减少换行行数
+  .t-pagination .t-pagination__number {
+    min-width: 28px;
+    padding: 0 6px;
+  }
+
+  .t-table__content {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .t-table {
+    // 根元素不得超出父容器：页面级 overflow-x:hidden 会把超出的部分硬裁掉，
+    // 横向滚动条（在 .t-table__content 上）也将永不可见——信道管理等宽表格
+    // 在手机上因此"显示不全"。min(720px, 100%) 保证宽父容器下仍保持 720px
+    // 可读下限；窄屏下收缩到父容器宽度，由内容区横向滚动查看全部列。
+    min-width: min(720px, 100%);
+    max-width: 100%;
+  }
+
+  // 行拖拽手柄：阻断浏览器手势，避免与横向滚动冲突，并加大触控热区
+  .t-table td.t-table__handle-draggable {
+    touch-action: none !important;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: grab;
+    width: 48px !important;
+    min-width: 48px;
+    padding: 0 !important;
+    height: auto !important;
+
+    > span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 44px;
+      padding: 8px 10px;
+    }
+  }
+
+  .t-table__handle-draggable:active {
+    cursor: grabbing;
+  }
+
+  // headerAffixedTop 会克隆一层吸顶表头，移动端与原表头叠在一起
+  // 即便 JS 已关闭，也兜底隐藏残余 affix 节点
+  .t-table__affixed-header-elm-wrap,
+  .t-table__affixed-header-elm,
+  .t-table > .t-affix,
+  .t-table .t-table__affixed-header-elm-wrap {
+    display: none !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  // ---------- page cards / images ----------
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .arco-card .t-card,
+  .arco-space .t-card {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  #statusArea,
+  .status-area {
+    height: auto !important;
+    min-height: 8em;
+    max-height: 40vh;
+  }
+
+  .self-sat-modal {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+
+  .field-md,
+  .field-lg,
+  .field-select {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .banner {
+    padding: 12px 12px 0 !important;
+
+    img {
+      max-width: 100% !important;
+      height: auto !important;
+    }
+
+    .arco-typography-title {
+      word-break: break-word;
+    }
+  }
+
+  .arco-radio-group-button {
+    flex-wrap: wrap;
+  }
+
+  .t-slider,
+  .threshold-slider {
+    width: 100% !important;
+    max-width: 240px;
+  }
+
+  .arco-tabs-content {
+    padding-top: 12px;
+  }
+
+  // long link text in cards should wrap, not push buttons off-screen
+  .arco-typography,
+  .arco-typography-text,
+  .arco-typography-paragraph {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .arco-link {
+    word-break: break-all;
+    // keep secondary action links tappable
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  // workshop list: actions must wrap under title instead of overflowing
+  .arco-list-item {
+    width: 100% !important;
+    flex-wrap: wrap;
+  }
+
+  .arco-list-item-action {
+    flex-wrap: wrap;
+    justify-content: flex-start !important;
+    margin-top: 8px;
+  }
+
+  .arco-card-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .arco-card-extra {
+    margin-right: 0 !important;
+    width: 100%;
+  }
+
+  .flash-file-btn {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .midMessage {
+    left: 50% !important;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 24px);
+  }
+
+  .arco-tabs-nav {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

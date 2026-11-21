@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 任务①：系统深色模式时使用深色 Activity 主题。
+     AppTheme 的 parent 在 values/ 下固定为 Light 主题时，Activity 的 uiMode
+     night 永远是 notnight，WebView 的 prefers-color-scheme 会因此恒报 light，
+     页面首屏引导脚本（matchMedia）完全失效 —— 这是"网页不跟随系统深色模式"的根因。
+     用 values-night 提供同名主题后：系统深色 → Activity 进入 night 模式
+     → WebView prefers-color-scheme 正确 → 页面引导脚本直接生效，首屏即暗。 -->
+<resources>
+    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/k5_window_bg</item>
+        <item name="android:colorPrimary">#165DFF</item>
+        <item name="android:colorAccent">#165DFF</item>
+        <item name="android:statusBarColor">@color/k5_status_bar</item>
+        <item name="android:navigationBarColor">@color/k5_nav_bar</item>
+    </style>
+</resources>

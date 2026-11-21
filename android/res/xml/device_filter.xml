@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CH340 / CH341 系列写频线的 VID:PID（十进制） -->
+<resources>
+    <usb-device vendor-id="6790" product-id="29987" /> <!-- 1a86:7523 CH340 -->
+    <usb-device vendor-id="6790" product-id="29986" /> <!-- 1a86:7522 CH340 -->
+    <usb-device vendor-id="6790" product-id="21795" /> <!-- 1a86:5523 CH341 -->
+    <usb-device vendor-id="17224" product-id="21795" /> <!-- 4348:5523 CH341 -->
+    <usb-device vendor-id="8580" product-id="87" /> <!-- 2184:0057 CH340 -->
+    <usb-device vendor-id="39302" product-id="29987" /> <!-- 9986:7523 CH340 -->
+</resources>

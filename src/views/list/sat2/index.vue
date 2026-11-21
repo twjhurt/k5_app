@@ -1,0 +1,730 @@
+<template>
+  <div class="container">
+    <a-modal width="650px" class="self-sat-modal" v-model:visible="state.selfSatModal" @ok="addSelfSat">
+      <template #title>
+        {{ $t("sat.selfSatInfo") }}
+      </template>
+      <div>
+        <a-textarea v-model="state.selfSatInfo" style="height: 120px;" :placeholder="selfSatPlaceholder" />
+      </div>
+    </a-modal>
+    <a-modal v-model:visible="state.visible" @ok="handleOk" :ok-text="$t('tool.scaned')">
+      <template #title>
+        {{ $t('tool.scanqr') }}
+      </template>
+      <div style="text-align: center;">
+        <img :src="state.qrcode" /><br>
+        {{ $t('tool.scannotice') }}
+      </div>
+    </a-modal>
+    <Breadcrumb :items="[$t('menu.list'), $t('menu.satellite2')]" />
+    <a-row :gutter="20" align="stretch">
+      <a-col :span="24">
+        <a-card class="general-card" :title="$t('menu.satellite2') + $t('global.onStart')">
+          <a-spin :loading="loading" style="width: 100%;" tip="正在处理 ...">
+            <a-form-item :label-col-style="{ width: '25%' }" field="dt" :label="$t('tool.brtime')"
+              @click="() => { state.showHide += 1 }">
+              {{ state.dt }}
+            </a-form-item>
+            <a-form-item v-show="state.showHide >= 5" :label-col-style="{ width: '25%' }" field="dtCustom"
+              label="自定义时间">
+              <div>
+                <a-date-picker class="field-md" show-time
+                  :time-picker-props="{ defaultValue: '00:00:00' }" format="YYYY-MM-DD HH:mm:ss"
+                  v-model="state.dtCustom" />
+                &nbsp;&nbsp;<t-button size="small" theme="success" @click="writeTime">写入时间到台站</t-button>
+              </div>
+            </a-form-item>
+            <a-form-item :label-col-style="{ width: '25%' }" field="sat" :label="$t('tool.selectSatellite')">
+              <div style="width: 100%;">
+                <a-select v-model="state.sat" @change="changeSat" :placeholder="$t('tool.selectSatellite') + '...'"
+                  allow-search allow-clear>
+                  <a-option v-for="item in state.satData" :key="item.name" :value="item.name">{{ item.name }}</a-option>
+                </a-select>
+                <a-link @click="() => { state.selfSatModal = true }" style="margin-top: 10px;">{{ $t("sat.addSelfSat")
+                  }}</a-link>
+              </div>
+            </a-form-item>
+            <div class="sat2-table-wrap">
+              <t-table ref="tableRef" row-key="key" :columns="columns" :data="state.satsData"
+              :editable-cell-state="editableCellState" bordered lazy-load />
+            </div>
+            <a-form-item :label-col-style="{ width: '25%' }" label="">
+              <a-button type="primary" @click="writeIt">{{ $t('tool.writeData') }}</a-button>
+            </a-form-item>
+            <a-divider />
+            <div id="statusArea" class="status-area">{{ state.status }}<div v-for="(w, i) in state.warnings" :key="i" class="sat-warn">{{ w }}</div></div>
+          </a-spin>
+        </a-card>
+      </a-col>
+    </a-row>
+  </div>
+</template>
+
+<script lang="ts" setup>
+import { ref, reactive, nextTick, onMounted, onUnmounted, computed } from 'vue';
+import { useAppStore } from '@/store';
+import { eeprom_write, eeprom_reboot, eeprom_init, hexReverseStringToUint8Array, stringToUint8Array, shared_read, shared_write } from '@/utils/serial.js';
+import useLoading from '@/hooks/loading';
+import QRCode from 'qrcode';
+import { Input, Select } from 'tdesign-vue-next';
+import { Message } from '@arco-design/web-vue';
+import { parseGpJson, parseSelfSatInput, ommToTle } from '@/utils/satellite.js';
+
+// Must match ESP32 mapping in src/app/driver/eeprom.cpp
+// EEPROM 0x1E200..0x20000 -> shared offset 0x10000..
+const UVE5_SHARED_TLE_BASE = 0x10000;
+
+const { loading, setLoading } = useLoading(true);
+
+const selfSatPlaceholder = `粘贴 TLE / OMM JSON，或星历文件 URL
+
+URL 例：
+https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=json
+
+TLE 例：
+ISS (ZARYA)
+1 25544U 98067A   24320.36274227  .00015569  00000+0  28188-3 0  9999
+2 25544  51.6413 286.4173 0007936 217.3657 298.3197 15.49809951481990
+
+OMM JSON 例：
+{"OBJECT_NAME":"ISS (ZARYA)","OBJECT_ID":"1998-067A","EPOCH":"2026-09-13T04:12:47.894976","MEAN_MOTION":15.49096932,"ECCENTRICITY":0.00049173,"INCLINATION":51.6307,"RA_OF_ASC_NODE":224.6171,"ARG_OF_PERICENTER":134.673,"MEAN_ANOMALY":225.4659,"EPHEMERIS_TYPE":0,"CLASSIFICATION_TYPE":"U","NORAD_CAT_ID":25544,"ELEMENT_SET_NO":999,"REV_AT_EPOCH":58539,"BSTAR":9.6694874e-5,"MEAN_MOTION_DOT":4.898e-5,"MEAN_MOTION_DDOT":0}`
+
+const appStore = useAppStore();
+
+const lngRef: any = ref(null)
+const latRef: any = ref(null)
+const altRef: any = ref(null)
+
+const state: {
+  uuid: string,
+  qrcode: string,
+  showHide: number,
+  status: string,
+  warnings: string[],
+  sat: string,
+  satData: any[],
+  lng: number,
+  lat: number,
+  alt: number,
+  tx: number,
+  rx: number,
+  txTone: number | undefined,
+  CTCSSOption: any[],
+  pass: any,
+  passOption: any[],
+  rxTone: number | undefined,
+  dt: any,
+  timer: any,
+  passCustom: any,
+  dtCustom: any,
+  freqDb: any,
+  visible: boolean,
+  selfSatModal: boolean,
+  selfSatInfo: string,
+  satsData: any[]
+} = reactive({
+  uuid: '',
+  qrcode: '',
+  visible: false,
+  showHide: 0,
+  status: "点击写入按钮写入卫星数据到设备\n\n",
+  warnings: [],
+  sat: '',
+  satData: [],
+  lng: 0,
+  lat: 0,
+  alt: 0,
+  tx: 0,
+  rx: 0,
+  txTone: 0,
+  rxTone: 0,
+  CTCSSOption: [0, 67.0, 69.3, 71.9, 74.4, 77.0, 79.7, 82.5, 85.4,
+    88.5, 91.5, 94.8, 97.4, 100.0, 103.5, 107.2, 110.9,
+    114.8, 118.8, 123.0, 127.3, 131.8, 136.5, 141.3, 146.2,
+    151.4, 156.7, 159.8, 162.2, 165.5, 167.9, 171.3, 173.8,
+    177.3, 179.9, 183.5, 186.2, 189.9, 192.8, 196.6, 199.5,
+    203.5, 206.5, 210.7, 218.1, 225.7, 229.1, 233.6, 241.8,
+    250.3, 254.1],
+  pass: undefined,
+  passOption: [],
+  dt: '',
+  timer: undefined,
+  passCustom: undefined,
+  dtCustom: undefined,
+  freqDb: [],
+  selfSatModal: false,
+  selfSatInfo: '',
+  satsData: []
+})
+
+// Auto-detect UVE5 shared-partition mode.
+// For UVE5 we always store TLE in the ESP32 shared partition (mapped from logical EEPROM 0x1E200..0x20000).
+// This is derived from the handshake firmware version at connect time.
+const isUveDevice = computed(() => appStore.isUve5);
+
+const uint8ToAscii = (bytes: Uint8Array) => {
+  // Keep it simple: the payload is ASCII. Replace NUL with spaces for readability.
+  const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  return text.replace(/\u0000/g, ' ');
+}
+
+const readSharedBytes = async (start: number, length: number) => {
+  const out = new Uint8Array(length);
+  for (let i = 0; i < length; i += 0x80) {
+    const chunkLen = Math.min(0x80, length - i);
+    const chunk = await shared_read(appStore.connectPort, start + i, chunkLen);
+    out.set(chunk.subarray(0, chunkLen), i);
+  }
+  return out;
+}
+
+const validateTleRecordBytes = (record: Uint8Array) => {
+  if (!record || record.length < 160) return { ok: false, reason: 'readback too short' };
+  const nameBytes = record.subarray(0, 9);
+  const line1Bytes = record.subarray(9, 9 + 69);
+  const line2Bytes = record.subarray(9 + 69, 9 + 69 + 69);
+
+  const allSame = (bytes: Uint8Array, value: number) => bytes.every((b) => b === value);
+  if (allSame(record, 0x00) || allSame(record, 0xff)) return { ok: false, reason: 'all 0x00/0xFF' };
+
+  const name = uint8ToAscii(nameBytes).trim();
+  const line1 = uint8ToAscii(line1Bytes);
+  const line2 = uint8ToAscii(line2Bytes);
+
+  // Minimal structure check; firmware parser is stricter.
+  const looksLikeTle = line1.startsWith('1 ') && line2.startsWith('2 ');
+  if (!looksLikeTle) {
+    return { ok: false, reason: `unexpected TLE header (name='${name}')` };
+  }
+  return { ok: true, reason: '', name, line1, line2 };
+}
+
+const editableCellState = (cellParams) => {
+  // 第一行不允许编辑
+  const { row } = cellParams;
+  return row.status !== 2;
+};
+
+const tableRef = ref();
+
+const columns = computed(() => [
+  {
+    title: '卫星名称',
+    colKey: 'satName',
+  },
+  {
+    title: '上行频率',
+    colKey: 'txFreq',
+    align: 'left',
+    edit: {
+      component: Input,
+      props: {
+        clearable: true,
+      },
+      // 触发校验的时机（when to validate)
+      validateTrigger: 'change',
+      // 透传给 component: Input 的事件（也可以在 edit.props 中添加）
+      on: (editContext: any) => ({
+        onBlur: () => {
+          console.log('失去焦点', editContext);
+        },
+        onEnter: (ctx: any) => {
+          ctx?.e?.preventDefault();
+          console.log('onEnter', ctx);
+        },
+      }),
+      // 除了点击非自身元素退出编辑态之外，还有哪些事件退出编辑态
+      abortEditOnEvent: ['onEnter'],
+      // 编辑完成，退出编辑态后触发
+      onEdited: (context: any) => {
+        console.log(context);
+        const newData = [...state.satsData];
+        newData.splice(context.rowIndex, 1, context.newRowData);
+        state.satsData = newData;
+        console.log('Edit firstName:', context);
+      },
+      rules: [
+        { required: true, message: '不能为空' },
+      ],
+      defaultEditable: true,
+    },
+  },
+  {
+    title: '上行亚音',
+    colKey: 'txTone',
+    edit: {
+      component: Select,
+      // props, 透传全部属性到 Select 组件
+      props: {
+        clearable: true,
+        options: state.CTCSSOption.map((e:any)=>{return {label: e, value: e}}),
+      },
+      on: (editContext: any) => ({
+        onChange: (params: any) => {
+          console.log('status changed', editContext, params);
+        },
+      }),
+      // 除了点击非自身元素退出编辑态之外，还有哪些事件退出编辑态
+      // abortEditOnEvent: ['onChange'],
+      // 编辑完成，退出编辑态后触发
+      onEdited: (context: any) => {
+        state.satsData.splice(context.rowIndex, 1, context.newRowData);
+        console.log('Edit Framework:', context);
+      },
+    },
+  },
+  {
+    title: '下行频率',
+    colKey: 'rxFreq',
+    align: 'left',
+    edit: {
+      component: Input,
+      props: {
+        clearable: true,
+      },
+      // 触发校验的时机（when to validate)
+      validateTrigger: 'change',
+      // 透传给 component: Input 的事件（也可以在 edit.props 中添加）
+      on: (editContext: any) => ({
+        onBlur: () => {
+          console.log('失去焦点', editContext);
+        },
+        onEnter: (ctx: any) => {
+          ctx?.e?.preventDefault();
+          console.log('onEnter', ctx);
+        },
+      }),
+      // 除了点击非自身元素退出编辑态之外，还有哪些事件退出编辑态
+      abortEditOnEvent: ['onEnter'],
+      // 编辑完成，退出编辑态后触发
+      onEdited: (context: any) => {
+        console.log(context);
+        const newData = [...state.satsData];
+        newData.splice(context.rowIndex, 1, context.newRowData);
+        state.satsData = newData;
+        console.log('Edit firstName:', context);
+      },
+      rules: [
+        { required: true, message: '不能为空' },
+      ],
+      defaultEditable: true,
+    },
+  },
+  {
+    title: '下行亚音',
+    colKey: 'rxTone',
+    edit: {
+      component: Select,
+      // props, 透传全部属性到 Select 组件
+      props: {
+        clearable: true,
+        options: state.CTCSSOption.map((e:any)=>{return {label: e, value: e}}),
+      },
+      on: (editContext: any) => ({
+        onChange: (params: any) => {
+          console.log('status changed', editContext, params);
+        },
+      }),
+      // 除了点击非自身元素退出编辑态之外，还有哪些事件退出编辑态
+      // abortEditOnEvent: ['onChange'],
+      // 编辑完成，退出编辑态后触发
+      onEdited: (context: any) => {
+        state.satsData.splice(context.rowIndex, 1, context.newRowData);
+        console.log('Edit Framework:', context);
+      },
+    },
+  }
+]);
+
+onMounted(async () => {
+  try {
+    if (sessionStorage.getItem('satFrequenciesRst')) {
+      state.freqDb = JSON.parse(sessionStorage.getItem('satFrequenciesRst') || "[]")
+    } else {
+      const rst = await (await fetch('https://github.jobcher.com/gh/https://raw.githubusercontent.com/palewire/ham-satellite-database/main/data/amsat-active-frequencies.json')).text()
+      state.freqDb = JSON.parse(rst)
+      sessionStorage.setItem("satFrequenciesRst", rst)
+    }
+  }
+  catch { }
+
+  state.timer = setInterval(() => {
+    state.dt = new Date().toLocaleString()
+    localStorage.setItem('myLng', state.lng.toString());
+    localStorage.setItem('myLat', state.lat.toString());
+    localStorage.setItem('myAlt', state.alt.toString());
+  }, 1000)
+})
+
+onUnmounted(() => {
+  try {
+    clearInterval(state.timer)
+  } catch { }
+})
+
+const writeTime = async () => {
+  if (appStore.connectState != true) { alert(sessionStorage.getItem('noticeConnectK5')); return; };
+  setLoading(true)
+  await eeprom_init(appStore.connectPort);
+  await syncTime();
+  await eeprom_reboot(appStore.connectPort);
+  setLoading(false)
+}
+
+const syncTime = async () => {
+  const date = state.dtCustom ? new Date(state.dtCustom) : new Date();
+  const dateArray = [
+    ...hexReverseStringToUint8Array(parseInt(date.getUTCFullYear().toString().substring(2, 4)).toString(16)),
+    ...hexReverseStringToUint8Array((date.getUTCMonth() + 1).toString(16)),
+    ...hexReverseStringToUint8Array(date.getUTCDate().toString(16)),
+    ...hexReverseStringToUint8Array(date.getUTCHours().toString(16)),
+    ...hexReverseStringToUint8Array(date.getUTCMinutes().toString(16)),
+    ...hexReverseStringToUint8Array(date.getUTCSeconds().toString(16))
+  ]
+  await eeprom_write(appStore.connectPort, 0x02BA0, new Uint8Array(dateArray), 0x06, appStore.configuration?.uart);
+}
+
+const changeSat = async (sat: any) => {
+  state.warnings = []
+  const data = state.satData.find(e => e.name == sat);
+  if (!data) {
+    nextTick(() => {
+      const textarea = document?.getElementById('statusArea');
+      if (textarea) textarea.scrollTop = textarea?.scrollHeight;
+    })
+    return
+  }
+  // 设备固件按经典 69 字节 TLE 存星历；CelesTrak OMM 在写入前才还原
+  let line: string[] | undefined
+  if (data.omm) {
+    line = ommToTle(data.omm) || undefined
+  } else if (data.tle1 && data.tle2) {
+    line = [data.tle1, data.tle2]
+  } else if (data.path?.length >= 2) {
+    line = data.path
+  }
+  if (!line) {
+    state.status += '\n该卫星星历不完整，无法还原为 TLE，请重新选择或粘贴完整 OMM/TLE\n'
+    nextTick(() => {
+      const textarea = document?.getElementById('statusArea');
+      if (textarea) textarea.scrollTop = textarea?.scrollHeight;
+    })
+    return
+  }
+  if (line) {
+    state.status += '\n卫星参数：\n'
+    line.map((e: string) => {
+      state.status += e + '\n'
+    })
+    const noradNum = data.omm ? Number(data.omm.NORAD_CAT_ID) : 0
+    if (noradNum >= 100000) {
+      state.warnings.push(`注意：NORAD ${noradNum} 已超过经典 TLE 5 位编号，写入设备的编号为后 5 位（${String(noradNum).slice(-5)}）。轨道根数仍可用。`)
+    }
+    let freqFlag = false
+    const noradId = data.omm
+      ? String(data.omm.NORAD_CAT_ID)
+      : (line[1]?.split(' ')[1] || '').trim()
+    state.freqDb.map((e: any) => {
+      if (noradId && noradId == e.norad_id && e.mode.indexOf('FM') != -1) {
+        console.log(e)
+        freqFlag = true
+        state.tx = e.uplink ? parseFloat(e.uplink.split('/')[0]) : 0
+        state.rx = e.downlink ? parseFloat(e.downlink.split('/')[0]) : 0
+        state.txTone = parseFloat(state.CTCSSOption.reduce((_e: any, _n: any) => {
+          return e.mode.indexOf(_n) != -1 ? _n : _e
+        }))
+      }
+    })
+    if (!freqFlag) {
+      state.tx = 0
+      state.rx = 0
+      state.txTone = 0
+      state.rxTone = 0
+    }
+    state.satsData.push({
+      "satName": sat,
+      "line": line,
+      "txFreq": state.tx,
+      "txTone": state.txTone,
+      "rxFreq": state.rx,
+      "rxTone": state.rxTone
+    })
+    console.log(state.satsData)
+  }
+  nextTick(() => {
+    const textarea = document?.getElementById('statusArea');
+    if (textarea) textarea.scrollTop = textarea?.scrollHeight;
+  })
+}
+
+const initSat = async () => {
+  setLoading(true)
+  try {
+    let rst = ''
+    // 旧键 satRst 是 TLE；FORMAT=json 的 OMM 数组可直接给 json2satrec
+    const cached = sessionStorage.getItem('satGpJson')
+    if (cached) {
+      rst = cached
+    } else {
+      rst = await (await fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=json')).text()
+    }
+    const ommList = parseGpJson(rst)
+    // 仅在解析出有效数据时写入缓存，避免把限流/错误页缓存后整段会话无法恢复
+    if (!cached && ommList.length) {
+      sessionStorage.setItem('satGpJson', rst)
+    }
+    state.satData = ommList.map((omm: any) => ({
+      name: omm.OBJECT_NAME,
+      omm,
+    }))
+  } finally {
+    setLoading(false)
+  }
+}
+initSat()
+
+const handleOk = async () => {
+  const lol = await (await fetch('https://k5.vicicode.cn/api/lol', {
+    method: "POST",
+    mode: "cors",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      func: 1,
+      uuid: state.uuid
+    })
+  })).json();
+  const jsonLol = JSON.parse(lol.cache);
+  if (jsonLol.length >= 3) {
+    state.lng = jsonLol[0],
+      state.lat = jsonLol[1],
+      state.alt = jsonLol[2]
+  }
+}
+
+const restoreRange = async (start: any = 0, uint8Array: any) => {
+  await eeprom_init(appStore.connectPort);
+  for (let i = start; i < uint8Array.length + start; i += 0x40) {
+    await eeprom_write(appStore.connectPort, i, uint8Array.slice(i - start, i - start + 0x40), 0x40, appStore.configuration?.uart);
+    state.status = state.status + "写入进度：" + (((i - start) / uint8Array.length) * 100).toFixed(1) + "%\n";
+    nextTick(() => {
+      const textarea = document?.getElementById('statusArea');
+      if (textarea) textarea.scrollTop = textarea?.scrollHeight;
+    })
+  }
+  state.status = state.status + "写入进度：100.0%\n";
+}
+
+const restoreRangeShared = async (start: number, uint8Array: Uint8Array) => {
+  await eeprom_init(appStore.connectPort);
+  for (let i = 0; i < uint8Array.length; i += 0x40) {
+    const chunk = uint8Array.slice(i, i + 0x40);
+    await shared_write(appStore.connectPort, start + i, chunk, chunk.length);
+    state.status = state.status + "写入进度：" + ((i / uint8Array.length) * 100).toFixed(1) + "%\n";
+    nextTick(() => {
+      const textarea = document?.getElementById('statusArea');
+      if (textarea) textarea.scrollTop = textarea?.scrollHeight;
+    })
+  }
+  state.status = state.status + "写入进度：100.0%\n";
+}
+
+const calculateChecksum = (line: string) => {
+  const chars = line.replace(/\d$/, ''); // 移除末位校验和
+  let sum = 0;
+  for (const char of chars) {
+    if (char === '-') sum += 1;
+    else sum += parseInt(char, 10) || 0;
+  }
+  return sum % 10;
+}
+
+const validateChecksum = (line: string) => {
+  const expected = parseInt(line[68], 10);
+  const actual = calculateChecksum(line);
+  return expected === actual;
+}
+
+const writeIt = async () => {
+  if (appStore.connectState != true) { alert(sessionStorage.getItem('noticeConnectK5')); return; };
+  if (!isUveDevice.value && appStore.configuration?.sat2 != true) {
+    alert(sessionStorage.getItem('noticeVersionNoSupport'));
+    return;
+  }
+  setLoading(true)
+  await eeprom_init(appStore.connectPort);
+  // console.log(state.satsData)
+  let payload = new Uint8Array(160 * 45)
+  let errs = ""
+  for(let i = 0; i < state.satsData.length; i++){
+    const sat = state.satsData[i]
+    //0x1E200~0x20000每160B是一个卫星的TLE
+    // 9B名称 69B第一行 69B第二行 2B上行亚音 2B下行亚音 4B上行频率 4B下行频率
+    // 卫星名称
+    payload.set(stringToUint8Array(sat.satName).subarray(0,9), i * 160)
+    // 第一行
+    payload.set(stringToUint8Array(sat.line[0]).subarray(0,69), i * 160 + 9)
+    if(!validateChecksum(sat.line[0]))errs += `第 ${i + 1} 行卫星星历第一行数据错误；`
+    // 第二行
+    payload.set(stringToUint8Array(sat.line[1]).subarray(0,69), i * 160 + 9 + 69)
+    if(!validateChecksum(sat.line[1]))errs += `第 ${i + 1} 行卫星星历第二行数据错误；`
+    // 上行亚音
+    const _txTone = new Uint8Array(2)
+    if (sat.txTone && sat.txTone > 0) {
+      _txTone.set(hexReverseStringToUint8Array(parseInt((sat.txTone * 10).toFixed(0)).toString(16)).subarray(0, 0x02))
+    }
+    payload.set(_txTone, i * 160 + 9 + 69 + 69)
+    // 下行亚音
+    const _rxTone = new Uint8Array(2)
+    if (sat.rxTone && sat.rxTone > 0) {
+      _rxTone.set(hexReverseStringToUint8Array(parseInt((sat.rxTone * 10).toFixed(0)).toString(16)).subarray(0, 0x02))
+    }
+    payload.set(_rxTone, i * 160 + 9 + 69 + 69 + 2)
+    // 上行频率
+    const _tx = new Uint8Array(4)
+    _tx.set(hexReverseStringToUint8Array(parseInt(((sat.txFreq * 1000000) / 10).toFixed(0)).toString(16)))
+    payload.set(_tx, i * 160 + 9 + 69 + 69 + 2 + 2)
+    if(parseInt(((sat.txFreq * 1000000) / 10).toFixed(0)) == 0)errs += `第 ${i + 1} 行卫星缺少上行频率；`
+    // 下行频率
+    const _rx = new Uint8Array(4)
+    _rx.set(hexReverseStringToUint8Array(parseInt(((sat.rxFreq * 1000000) / 10).toFixed(0)).toString(16)))
+    payload.set(_rx, i * 160 + 9 + 69 + 69 + 2 + 2 + 4)
+    if(parseInt(((sat.rxFreq * 1000000) / 10).toFixed(0)) == 0)errs += `第 ${i + 1} 行卫星缺少下行频率；`
+  }
+  if(errs != ""){
+    setLoading(false)
+    return Message.error({
+      content: errs,
+      duration: 10 * 1000,
+    });
+  }
+  if (isUveDevice.value) {
+    state.status += `检测到 UVE 设备：将写入 shared@0x${UVE5_SHARED_TLE_BASE.toString(16)}\n`;
+    await restoreRangeShared(UVE5_SHARED_TLE_BASE, payload)
+
+    // Read-back verify first record so users immediately know whether the shared write actually landed.
+    try {
+      const first = await readSharedBytes(UVE5_SHARED_TLE_BASE, 160);
+      const chk = validateTleRecordBytes(first);
+      if (!chk.ok) {
+        setLoading(false)
+        return Message.error({
+          content: `写入完成但读回校验失败：${chk.reason}。这通常表示 shared 分区不可用（分区表没刷/label 不匹配）或固件未支持 shared 读写命令。\n\n如果你是用 app0_main 的快速上传刷机：请确保 partitions.bin 也被写入（本仓库 scripts/upload_app0.py 已改为同时刷 partitions.bin@0x8000）。或者完整刷一次 factory/分区表后再重试。`,
+          duration: 12 * 1000,
+        });
+      }
+      state.status += `读回校验通过：${chk.name}\n`;
+    } catch (e: any) {
+      setLoading(false)
+      return Message.error({
+        content: `写入完成但读回校验异常：${e?.message ?? e}。可能固件不支持 shared_read/shared_write。`,
+        duration: 12 * 1000,
+      });
+    }
+  } else {
+    state.status += `非 UVE 设备：将写入 EEPROM@0x1E200\n`;
+    await restoreRange(0x1E200, payload)
+  }
+  await eeprom_reboot(appStore.connectPort);
+  setLoading(false)
+}
+
+const isValidURL = (url: string) => {
+  const pattern = new RegExp('^(https?:\\/\\/)?' + // 协议 (http 或 https)
+    '((([a-zA-Z\\d]([a-zA-Z\\d-]*[a-zA-Z\\d])*)\\.)+[a-zA-Z]{2,}|' + // 域名
+    '((\\d{1,3}\\.){3}\\d{1,3}))' + // 或者 IP 地址 (IPv4)
+    '(\\:\\d+)?(\\/[-a-zA-Z\\d%_.~+]*)*' + // 端口号和路径
+    '(\\?[;&a-zA-Z\\d%_.~+=-]*)?' + // 查询字符串
+    '(\\#[-a-zA-Z\\d_]*)?$', 'i'); // 锚点
+  return !!pattern.test(url);
+}
+
+const addSelfSat = async () => {
+  const input = (state.selfSatInfo || '').trim()
+  if (!input) return
+  let text = input
+  if (isValidURL(input)) {
+    try {
+      text = await (await fetch(input)).text()
+    } catch {
+      alert('拉取 URL 失败（可能是跨域或网络问题），可手动打开链接后复制内容粘贴')
+      return
+    }
+  }
+  const sat = parseSelfSatInput(text)
+  if (sat.length === 0) {
+    alert('未识别到卫星数据，请粘贴/URL 指向 TLE 或 OMM JSON')
+    return
+  }
+  state.satData = sat.concat(state.satData)
+  state.selfSatInfo = ''
+}
+</script>
+
+<script lang="ts">
+export default {
+  name: 'Sat',
+};
+</script>
+
+<style scoped lang="less">
+.container {
+  padding: 0 20px 20px 20px;
+
+  :deep(.arco-list-content) {
+    overflow-x: hidden;
+  }
+
+  :deep(.arco-card-meta-title) {
+    font-size: 14px;
+  }
+}
+
+:deep(.arco-list-col) {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+
+#statusArea .sat-warn {
+  color: rgb(var(--orange-6));
+}
+
+.sat2-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+:deep(.block-title) {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+}
+
+:deep(.list-wrap) {
+
+  // min-height: 140px;
+  .list-row {
+    align-items: stretch;
+
+    .list-col {
+      margin-bottom: 16px;
+    }
+  }
+
+  :deep(.arco-space) {
+    width: 100%;
+
+    .arco-space-item {
+      &:last-child {
+        flex: 1;
+      }
+    }
+  }
+}
+</style>

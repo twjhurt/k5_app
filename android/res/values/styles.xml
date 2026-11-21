@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <!-- 窗口背景用颜色资源（values-night 提供深色变体），系统深色时冷启动不再闪白 -->
+        <item name="android:windowBackground">@color/k5_window_bg</item>
+        <item name="android:colorPrimary">#165DFF</item>
+        <item name="android:colorAccent">#165DFF</item>
+        <item name="android:statusBarColor">@color/k5_status_bar</item>
+        <item name="android:navigationBarColor">@color/k5_nav_bar</item>
+    </style>
+</resources>

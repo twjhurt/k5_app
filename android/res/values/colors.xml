@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 浅色主题下的窗口/导航栏颜色（深色见 values-night/colors.xml） -->
+<resources>
+    <color name="k5_window_bg">#FFFFFF</color>
+    <color name="k5_nav_bar">#FFFFFF</color>
+    <color name="k5_status_bar">#0E42D2</color>
+</resources>

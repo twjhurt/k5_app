@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 任务①：系统深色模式下的窗口/导航栏颜色，消除 APK 冷启动时的白屏闪烁 -->
+<resources>
+    <color name="k5_window_bg">#17171A</color>
+    <color name="k5_nav_bar">#17171A</color>
+    <color name="k5_status_bar">#0F0F10</color>
+</resources>
