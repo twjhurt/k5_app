@@ -2,10 +2,25 @@
 
 把仓库里的 K5Web（UV-K5/K6 写频 Web 应用）整合成一个**可离线运行、能通过 OTG 连接手台**的安卓安装包。
 
-- 安装包：`release/K5Web-android-1.0.25.apk`（3.94 MB，已签名，minSdk 26 / targetSdk 34）
-- SHA-256：`E122D506044B712B3D34ADFC7349CAED793A989068AA1DC1061E607DC6BA46CD`
+- 安装包：`release/K5Web-android-1.0.26.apk`（3.94 MB，已签名，minSdk 26 / targetSdk 34）
+- SHA-256：`E3F536B3D04776635881D7334A995DF64E635C47B04C7A1F3BEC9B0F5A471FE1`
 - 应用名：K5Web 写频
-- 版本：versionCode 26 / versionName 1.0.25（同签名，可直接覆盖安装旧版）
+- 版本：versionCode 27 / versionName 1.0.26（同签名，可直接覆盖安装旧版）
+
+## v1.0.26：星历写入页新增文案国际化（English）
+
+星历写入页系列功能新增的文案接入 i18n，切换 English 时显示对应英文：
+
+1. 提示窗：正在联网获取星历 / 终止获取 / {阶段}中（{x}秒）/ 停止定位；
+2. 定位提示：定位成功 / 已停止定位 / 服务未开启与权限等失败文案；
+3. 星历获取与导入：星历获取成功 / 已终止获取星历 / 无网络 / 导入上次
+   星历及各错误提示；
+4. look4sat 联动：打开look4sat / 写入后自动打开look4sat / 未安装与
+   环境不支持提示。
+
+> 原生层（K5Bridge Java）的系统弹窗/Toast 文案不在本次范围；
+> 历史遗留硬编码中文（alert、状态区字段等）未改动。
+> 已通过手机模拟 e2e 回归验证（全部 PASS）。
 
 ## v1.0.25：修复"打开look4sat"误报未安装
 

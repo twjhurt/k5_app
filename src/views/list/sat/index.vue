@@ -1,13 +1,13 @@
 <template>
   <div class="container">
     <t-message v-if="ephState.fetching" theme="loading" class="midMessage">
-      <span>正在联网获取星历</span>
-      <a-link theme="primary" style="margin-left: 12px;" @click="cancelFetchEphemeris">终止获取</a-link>
+      <span>{{ $t('tool.sat.fetchingEphemeris') }}</span>
+      <a-link theme="primary" style="margin-left: 12px;" @click="cancelFetchEphemeris">{{ $t('tool.sat.cancelFetchLink') }}</a-link>
     </t-message>
     <t-message v-if="locState.locating" theme="loading" class="midMessageLoc">
       <div style="display: flex; align-items: center; min-width: 220px; max-width: calc(100vw - 48px);">
-        <span style="flex: 1;">{{ locState.stage }}中（{{ locState.elapsed }}秒）</span>
-        <a-button size="mini" type="text" style="margin-left: 12px; flex-shrink: 0;" @click="cancelLocate">停止定位</a-button>
+        <span style="flex: 1;">{{ $t('tool.sat.locatingTip', { stage: locStageLabel, sec: locState.elapsed }) }}</span>
+        <a-button size="mini" type="text" style="margin-left: 12px; flex-shrink: 0;" @click="cancelLocate">{{ $t('tool.sat.stopLocate') }}</a-button>
       </div>
     </t-message>
     <a-modal width="650px" class="self-sat-modal" v-model:visible="state.selfSatModal" @ok="addSelfSat">
@@ -53,7 +53,7 @@
                 </a-select>
                 <a-link @click="() => { state.selfSatModal = true }" style="margin-top: 10px;">{{ $t("sat.addSelfSat")
                   }}</a-link>
-                <a-button size="small" style="margin-left: 16px; margin-top: 10px;" @click="importLastEphemeris">导入上次星历</a-button>
+                <a-button size="small" style="margin-left: 16px; margin-top: 10px;" @click="importLastEphemeris">{{ $t('tool.sat.importLast') }}</a-button>
               </div>
             </a-form-item>
             <a-form-item :label-col-style="{ width: '25%' }" field="lng" :label="$t('tool.longitude')">
@@ -105,10 +105,10 @@
             <a-form-item :label-col-style="{ width: '25%' }" label="">
               <a-space>
                 <a-button type="primary" @click="writeIt">{{ $t('tool.writeData') }}</a-button>
-                <a-button v-if="!state.autoOpenLook4sat" @click="openLook4sat">打开look4sat</a-button>
+                <a-button v-if="!state.autoOpenLook4sat" @click="openLook4sat">{{ $t('tool.sat.openLook4sat') }}</a-button>
                 <span style="display: inline-flex; align-items: center;">
                   <a-switch v-model="state.autoOpenLook4sat" type="round" @change="saveAutoOpenLook4sat" />
-                  <span style="margin-left: 8px; font-size: 12px;">写入后自动打开look4sat</span>
+                  <span style="margin-left: 8px; font-size: 12px;">{{ $t('tool.sat.autoOpenLook4sat') }}</span>
                 </span>
               </a-space>
             </a-form-item>
@@ -122,7 +122,8 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { Message } from '@arco-design/web-vue';
 import { useAppStore } from '@/store';
 import { eeprom_write, eeprom_reboot, eeprom_init, hexReverseStringToUint8Array, stringToUint8Array } from '@/utils/serial.js';
@@ -147,6 +148,7 @@ OMM JSON 例：
 {"OBJECT_NAME":"ISS (ZARYA)","OBJECT_ID":"1998-067A","EPOCH":"2026-09-13T04:12:47.894976","MEAN_MOTION":15.49096932,"ECCENTRICITY":0.00049173,"INCLINATION":51.6307,"RA_OF_ASC_NODE":224.6171,"ARG_OF_PERICENTER":134.673,"MEAN_ANOMALY":225.4659,"EPHEMERIS_TYPE":0,"CLASSIFICATION_TYPE":"U","NORAD_CAT_ID":25544,"ELEMENT_SET_NO":999,"REV_AT_EPOCH":58539,"BSTAR":9.6694874e-5,"MEAN_MOTION_DOT":4.898e-5,"MEAN_MOTION_DDOT":0}`
 
 const appStore = useAppStore();
+const { t } = useI18n();
 
 const lngRef: any = ref(null)
 const latRef: any = ref(null)
@@ -227,10 +229,10 @@ const openLook4sat = async () => {
     try {
       await k5app.openApp(LOOK4SAT_PKG)
     } catch (err: any) {
-      Message.error((err && err.message) ? err.message : '未安装 look4sat，无法打开')
+      Message.error((err && err.message) ? err.message : t('tool.sat.look4satNotInstalled'))
     }
   } else {
-    Message.warning('当前环境不支持直接打开安卓应用（仅安卓端可用）')
+    Message.warning(t('tool.sat.openAppUnsupported'))
   }
 }
 
@@ -354,8 +356,9 @@ const cancelFetchEphemeris = () => {
   }
 }
 
-// 获取定位提示窗状态：阶段（网络定位/卫星定位）+ 已用时秒数，支持中断
-const locState = reactive({ locating: false, stage: '网络定位', elapsed: 0 });
+// 获取定位提示窗状态：阶段（network=网络定位 / gnss=卫星定位）+ 已用时秒数，支持中断
+const locState = reactive({ locating: false, stage: 'network', elapsed: 0 });
+const locStageLabel = computed(() => t(locState.stage === 'gnss' ? 'tool.sat.stageGnss' : 'tool.sat.stageNetwork'));
 let locTimer: any = null;
 let locCancelled = false;
 // 定位是否已成功填入经纬度：用于挂载恢复 localStorage 时避免覆盖定位结果
@@ -365,7 +368,7 @@ let locateCtl: { cancel: () => void } | null = null;
 const startLocTip = () => {
   locCancelled = false;
   locState.locating = true;
-  locState.stage = '网络定位';
+  locState.stage = 'network';
   locState.elapsed = 0;
   if (locTimer) clearInterval(locTimer);
   locTimer = setInterval(() => { locState.elapsed += 1; }, 1000);
@@ -385,7 +388,7 @@ const cancelLocate = () => {
   locateCtl = null;
   // 立即解除"正在处理"遮罩，不等底层定位超时
   setLoading(false);
-  Message.info('已停止定位')
+  Message.info(t('tool.sat.locStopped'))
 }
 
 const initSat = async () => {
@@ -399,7 +402,7 @@ const initSat = async () => {
     } else {
       // 联网获取前检测网络：无网络则提示且不发起请求
       if (!navigator.onLine) {
-        Message.error('无网络无法获取星历')
+        Message.error(t('tool.sat.noNetwork'))
         return
       }
       ephState.fetching = true
@@ -409,13 +412,13 @@ const initSat = async () => {
         rst = await (await fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=json', { signal: ctrl.signal })).text()
         // 取消后才返回的响应：丢弃，不进入解析
         if (ctrl.signal.aborted) {
-          Message.info('已终止获取星历')
+          Message.info(t('tool.sat.fetchCanceled'))
           return
         }
       } catch (err: any) {
         // 用户点击"终止获取"：关闭提示窗并恢复状态，不再走后续解析
         if (err && (err.name === 'AbortError' || ephAbort === null)) {
-          Message.info('已终止获取星历')
+          Message.info(t('tool.sat.fetchCanceled'))
           return
         }
         throw err
@@ -429,7 +432,7 @@ const initSat = async () => {
     if (!cached && ommList.length) {
       sessionStorage.setItem('satGpJson', rst)
       // 星历通过网络获取成功时提示（缓存加载不提示）
-      Message.success('星历获取成功')
+      Message.success(t('tool.sat.fetchSuccess'))
     }
     // 星历获取成功：自动把最新星历保存到应用内部存储（localStorage，关闭应用不清除），并记录保存时间
     if (ommList.length) {
@@ -452,13 +455,13 @@ const importLastEphemeris = () => {
   try {
     const raw = localStorage.getItem('k5webLastEphemeris')
     if (!raw) {
-      Message.warning('暂未保存过星历，请先成功获取星历')
+      Message.warning(t('tool.sat.noSavedEph'))
       return
     }
     const obj = JSON.parse(raw)
     const ommList = parseGpJson(obj.data || '')
     if (!ommList.length) {
-      Message.warning('已保存的星历数据无效，请先重新获取星历')
+      Message.warning(t('tool.sat.savedEphInvalid'))
       return
     }
     state.satData = ommList.map((omm: any) => ({
@@ -468,9 +471,9 @@ const importLastEphemeris = () => {
     const p = (n: number) => String(n).padStart(2, '0')
     const d = new Date(obj.savedAt)
     const ts = `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
-    Message.success(`已成功导入${ts}保存的星历`)
+    Message.success(t('tool.sat.importedEph', { time: ts }))
   } catch {
-    Message.error('导入上次星历失败')
+    Message.error(t('tool.sat.importFailed'))
   }
 }
 
@@ -481,13 +484,13 @@ const getLocation = async () => {
   // 第二参数为阶段回调：'web' 网络定位开始 / 'native' 卫星定位兜底开始；
   // 返回的 promise 带 cancel()，供"停止定位"真正中止任务
   const p = getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000 }, (stage) => {
-    locState.stage = stage === 'native' ? '卫星定位' : '网络定位'
+    locState.stage = stage === 'native' ? 'gnss' : 'network'
   })
   locateCtl = (p as any).cancel ? (p as any) : null
   p.then((e) => {
     stopLocTip()
     if (locCancelled) { setLoading(false); return }
-    Message.success('定位成功')
+    Message.success(t('tool.sat.locSuccess'))
     locFilled = true
     if (e.coords) {
       state.lat = e.coords.latitude
@@ -501,11 +504,12 @@ const getLocation = async () => {
     setLoading(false)
     if (err && err.name === 'LocationServiceDisabled') {
       // 定位服务未开启：原生侧已弹出"去开启"引导窗，这里同步提示
-      Message.warning('设备定位服务未开启，请在弹窗中开启定位服务后重试')
+      Message.warning(t('tool.sat.locServiceDisabled'))
     } else if (err && err.code === err.PERMISSION_DENIED) {
-      Message.error('定位失败：请在系统设置中允许本应用使用位置权限')
+      Message.error(t('tool.sat.locPermDenied'))
     } else {
-      Message.error('定位失败：' + (err && err.message ? err.message : '请检查设备定位服务是否开启'))
+      const reason = err && err.message ? err.message : t('tool.sat.locFailedReason')
+      Message.error(t('tool.sat.locFailed', { reason }))
     }
   })
 }
