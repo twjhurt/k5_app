@@ -2,10 +2,23 @@
 
 把仓库里的 K5Web（UV-K5/K6 写频 Web 应用）整合成一个**可离线运行、能通过 OTG 连接手台**的安卓安装包。
 
-- 安装包：`release/K5Web-android-1.0.24.apk`（3.94 MB，已签名，minSdk 26 / targetSdk 34）
-- SHA-256：`270CC0C3F49161DF308DE40D41992B2FAAC28346D934FEBD92C5EE32017728F1`
+- 安装包：`release/K5Web-android-1.0.25.apk`（3.94 MB，已签名，minSdk 26 / targetSdk 34）
+- SHA-256：`E122D506044B712B3D34ADFC7349CAED793A989068AA1DC1061E607DC6BA46CD`
 - 应用名：K5Web 写频
-- 版本：versionCode 25 / versionName 1.0.24（同签名，可直接覆盖安装旧版）
+- 版本：versionCode 26 / versionName 1.0.25（同签名，可直接覆盖安装旧版）
+
+## v1.0.25：修复"打开look4sat"误报未安装
+
+1. **根因**：Android 11（API 30）起 targetSdk 30+ 的应用默认受**包可见性
+   过滤**限制，看不到其他已安装应用，`getLaunchIntentForPackage()` 一律
+   返回 null，被误判为"未安装应用"——并非权限未申请，也非 WebView 限制
+   （打开应用本就走原生应用层 K5Bridge.openApp）。
+2. **修复**：AndroidManifest 新增 `<queries>` 声明（look4sat 包名 + 通用
+   启动器意图）；openApp 增加兜底——拿不到启动意图时用 `getPackageInfo`
+   复核是否安装，已安装则手动构造主界面启动意图；启动失败区分
+   ActivityNotFoundException 给出准确提示。
+
+> 其余内容与 v1.0.24 相同，继续保留。
 
 ## v1.0.24：修正 look4sat 包名
 

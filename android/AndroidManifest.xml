@@ -15,6 +15,17 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
+    <!-- Android 11+（targetSdk 30+）包可见性过滤：不声明 queries 时
+         getLaunchIntentForPackage 对其他应用一律返回 null，会被误判为未安装。
+         声明 look4sat 包名与通用启动器意图，保证"打开 look4sat"可用 -->
+    <queries>
+        <package android:name="cn.ba7opf.look4sat" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:hardwareAccelerated="true"

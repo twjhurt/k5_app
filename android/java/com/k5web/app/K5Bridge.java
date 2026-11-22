@@ -1263,8 +1263,24 @@ public final class K5Bridge {
                         return;
                     }
                     final String packageName = pkg;
-                    final Intent intent = activity.getPackageManager().getLaunchIntentForPackage(packageName);
+                    Intent intent = activity.getPackageManager().getLaunchIntentForPackage(packageName);
                     if (intent == null) {
+                        // getLaunchIntentForPackage 返回 null 时复核是否真的未安装：
+                        // 已安装（getPackageInfo 成功）则手动构造主界面启动意图
+                        boolean installed = false;
+                        try {
+                            activity.getPackageManager().getPackageInfo(packageName, 0);
+                            installed = true;
+                        } catch (Throwable ignored) {
+                        }
+                        if (installed) {
+                            intent = new Intent(Intent.ACTION_MAIN);
+                            intent.addCategory(Intent.CATEGORY_LAUNCHER);
+                            intent.setPackage(packageName);
+                        }
+                    }
+                    final Intent launchIntent = intent;
+                    if (launchIntent == null) {
                         replyError(id, "NotFoundError", "未安装应用：" + packageName);
                         return;
                     }
@@ -1272,9 +1288,11 @@ public final class K5Bridge {
                         @Override
                         public void run() {
                             try {
-                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                                activity.startActivity(intent);
+                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                activity.startActivity(launchIntent);
                                 replyOk(id, new JSONObject());
+                            } catch (android.content.ActivityNotFoundException e) {
+                                replyError(id, "NotFoundError", "未安装应用或无启动入口：" + packageName);
                             } catch (Throwable t) {
                                 replyError(id, t);
                             }
