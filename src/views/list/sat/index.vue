@@ -4,9 +4,9 @@
       <span>正在联网获取星历</span>
       <a-link theme="primary" style="margin-left: 12px;" @click="cancelFetchEphemeris">终止获取</a-link>
     </t-message>
-    <t-message v-if="locState.locating" theme="loading" class="midMessage">
-      <div style="display: flex; align-items: center; min-width: 340px;">
-        <span style="flex: 1;">正在获取定位：{{ locState.stage }}（已用时 {{ locState.elapsed }} 秒）</span>
+    <t-message v-if="locState.locating" theme="loading" class="midMessageLoc">
+      <div style="display: flex; align-items: center; min-width: 220px; max-width: calc(100vw - 48px);">
+        <span style="flex: 1;">{{ locState.stage }}中（{{ locState.elapsed }}秒）</span>
         <a-button size="mini" type="text" style="margin-left: 12px; flex-shrink: 0;" @click="cancelLocate">停止定位</a-button>
       </div>
     </t-message>
@@ -316,6 +316,9 @@ const cancelFetchEphemeris = () => {
     const ctrl = ephAbort;
     ephAbort = null;
     ctrl.abort();
+    // 立即关闭提示窗并解除"正在处理"遮罩，不等 fetch 响应 abort
+    ephState.fetching = false;
+    setLoading(false);
   }
 }
 
@@ -323,6 +326,8 @@ const cancelFetchEphemeris = () => {
 const locState = reactive({ locating: false, stage: '网络定位', elapsed: 0 });
 let locTimer: any = null;
 let locCancelled = false;
+// 当前定位任务的取消控制器：cancel() 会中止原生卫星定位并丢弃后续结果
+let locateCtl: { cancel: () => void } | null = null;
 const startLocTip = () => {
   locCancelled = false;
   locState.locating = true;
@@ -341,6 +346,11 @@ const stopLocTip = () => {
 const cancelLocate = () => {
   locCancelled = true;
   stopLocTip();
+  // 真正停止任务：中止原生卫星定位监听，丢弃迟到的定位结果
+  try { locateCtl && locateCtl.cancel(); } catch { }
+  locateCtl = null;
+  // 立即解除"正在处理"遮罩，不等底层定位超时
+  setLoading(false);
   Message.info('已停止定位')
 }
 
@@ -359,9 +369,15 @@ const initSat = async () => {
         return
       }
       ephState.fetching = true
-      ephAbort = new AbortController()
+      const ctrl = new AbortController()
+      ephAbort = ctrl
       try {
-        rst = await (await fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=json', { signal: ephAbort.signal })).text()
+        rst = await (await fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=json', { signal: ctrl.signal })).text()
+        // 取消后才返回的响应：丢弃，不进入解析
+        if (ctrl.signal.aborted) {
+          Message.info('已终止获取星历')
+          return
+        }
       } catch (err: any) {
         // 用户点击"终止获取"：关闭提示窗并恢复状态，不再走后续解析
         if (err && (err.name === 'AbortError' || ephAbort === null)) {
@@ -428,10 +444,13 @@ const getLocation = async () => {
   setLoading(true)
   startLocTip()
   // 网络正常时沿用原有浏览器定位；无网络/网络定位失败时自动切换卫星定位兜底
-  // 第二参数为阶段回调：'web' 网络定位开始 / 'native' 卫星定位兜底开始
-  getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000 }, (stage) => {
+  // 第二参数为阶段回调：'web' 网络定位开始 / 'native' 卫星定位兜底开始；
+  // 返回的 promise 带 cancel()，供"停止定位"真正中止任务
+  const p = getCurrentPositionCompat({ enableHighAccuracy: true, timeout: 15000 }, (stage) => {
     locState.stage = stage === 'native' ? '卫星定位' : '网络定位'
-  }).then((e) => {
+  })
+  locateCtl = (p as any).cancel ? (p as any) : null
+  p.then((e) => {
     stopLocTip()
     if (locCancelled) { setLoading(false); return }
     if (e.coords) {
@@ -688,6 +707,17 @@ export default {
   z-index: 99;
   left: 50%;
   transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+// 定位提示窗：与星历提示窗上下错开，避免两者同显时重叠遮盖
+.midMessageLoc {
+  position: fixed;
+  top: calc(20% + 64px);
+  z-index: 99;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .container {

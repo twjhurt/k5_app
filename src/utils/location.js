@@ -12,11 +12,17 @@
  * 可选第二参数 onStage(stage)：阶段回调，stage 为 'web'（浏览器/网络定位
  * 开始）或 'native'（卫星定位兜底开始），供调用方展示详细状态信息。
  *
+ * 返回 promise 上附带 cancel()：调用后置取消标志，丢弃迟到结果；
+ * 若卫星定位已在原生侧进行，则同时调 K5GEO.cancelLocation 真正中止监听。
+ *
  * 返回值统一为 { coords: { latitude, longitude, altitude, accuracy }, timestamp }，
  * 与 navigator.geolocation 的 Position 结构兼容，现有调用方无需改动取值方式。
  */
 export function getCurrentPositionCompat(options, onStage) {
-  return new Promise((resolve, reject) => {
+  let cancelled = false;
+  let nativePromise = null;
+
+  const promise = new Promise((resolve, reject) => {
     const nativeGeo = (typeof window !== 'undefined' && window.K5GEO && typeof window.K5GEO.getLocation === 'function')
       ? window.K5GEO.getLocation : null;
     const nativeEnv = (typeof window !== 'undefined' && window.K5GEO && typeof window.K5GEO.checkLocationEnv === 'function')
@@ -29,11 +35,14 @@ export function getCurrentPositionCompat(options, onStage) {
     };
 
     const fromNative = () => {
+      if (cancelled) {
+        return Promise.reject({ name: 'AbortError', message: '已停止定位' });
+      }
       if (!nativeGeo) {
         return Promise.reject(new Error('当前环境不支持卫星定位'));
       }
       notify('native');
-      return nativeGeo().then((c) => ({
+      nativePromise = nativeGeo().then((c) => ({
         coords: {
           latitude: c.latitude,
           longitude: c.longitude,
@@ -42,9 +51,14 @@ export function getCurrentPositionCompat(options, onStage) {
         },
         timestamp: Date.now(),
       }));
+      return nativePromise;
     };
 
     const start = () => {
+      if (cancelled) {
+        reject({ name: 'AbortError', message: '已停止定位' });
+        return;
+      }
       if (!hasWeb) {
         // 桌面浏览器(壳内必有 geolocation)或极旧环境：直接走原生/失败
         fromNative().then(resolve).catch(reject);
@@ -52,8 +66,12 @@ export function getCurrentPositionCompat(options, onStage) {
       }
       notify('web');
       navigator.geolocation.getCurrentPosition(
-        (pos) => resolve(pos),
+        (pos) => {
+          if (cancelled) return; // 已停止：丢弃迟到结果
+          resolve(pos);
+        },
         (err) => {
+          if (cancelled) return; // 已停止：不再进入卫星兜底
           // 网络定位失败 → 卫星定位兜底；兜底失败仍抛出原始错误，
           // 调用方现有的错误提示（权限/超时文案）保持不变。
           // 例外：定位服务未开启（原生侧已弹窗引导）时如实抛出该错误，
@@ -81,4 +99,17 @@ export function getCurrentPositionCompat(options, onStage) {
       start();
     }
   });
+
+  promise.cancel = () => {
+    cancelled = true;
+    try {
+      if (nativePromise && nativePromise.__k5id
+        && typeof window !== 'undefined' && window.K5GEO
+        && typeof window.K5GEO.cancelLocation === 'function') {
+        window.K5GEO.cancelLocation(nativePromise.__k5id).catch(() => { /* 取消失败不影响 */ });
+      }
+    } catch { /* 取消失败不影响 */ }
+  };
+
+  return promise;
 }

@@ -1201,6 +1201,48 @@ public final class K5Bridge {
         return true;
     }
 
+    /** 进行中的卫星定位会话表：key 为本次请求的桥接 id，取消/完成/超时后移除。 */
+    private final Map<String, GeoSession> geoSessions = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 中止进行中的原生卫星定位（"停止定位"按钮调用）：根据 argsJson.targetId
+     * 找到对应 GeoSession，停止监听并回复 AbortError；会话不存在时按已停止处理。
+     */
+    @JavascriptInterface
+    public void cancelLocation(final String id, final String argsJson) {
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String targetId = null;
+                    try {
+                        targetId = new JSONObject(argsJson == null ? "{}" : argsJson).optString("targetId", null);
+                    } catch (Throwable ignored) {
+                    }
+                    if (targetId == null || targetId.length() == 0) {
+                        replyError(id, "InvalidStateError", "cancelLocation 缺少 targetId");
+                        return;
+                    }
+                    GeoSession session = geoSessions.remove(targetId);
+                    if (session == null) {
+                        // 会话已结束或不存在，视为已停止
+                        replyOk(id, new JSONObject());
+                        return;
+                    }
+                    if (session.settled.compareAndSet(false, true)) {
+                        session.cancel();
+                        replyError(targetId, "AbortError", "已停止定位");
+                    }
+                    replyOk(id, new JSONObject());
+                } catch (Throwable t) {
+                    replyError(id, t);
+                }
+            }
+        }, "k5-geocancel");
+        t.setDaemon(true);
+        t.start();
+    }
+
     private void geoAcquire(final String id) {
         try {
             // 前置环境检查：先权限，后定位服务开关；未通过（含服务未开启弹窗）直接返回
@@ -1221,6 +1263,7 @@ public final class K5Bridge {
             boolean gpsOn = geoProviderEnabled(lm, LocationManager.GPS_PROVIDER);
             boolean netOn = geoProviderEnabled(lm, LocationManager.NETWORK_PROVIDER);
             final GeoSession session = new GeoSession(this, id, lm);
+            geoSessions.put(id, session); // 登记进行中的会话，供 cancelLocation 中止
             try {
                 if (gpsOn) {
                     lm.requestSingleUpdate(LocationManager.GPS_PROVIDER,
@@ -1240,6 +1283,7 @@ public final class K5Bridge {
             session.armTimeout(new Runnable() {
                 @Override
                 public void run() {
+                    geoSessions.remove(id);
                     if (session.settled.compareAndSet(false, true)) {
                         session.cancel();
                         replyError(id, "TimeoutError", "卫星定位超时：请到空旷处重试，或检查设备定位服务");
@@ -1276,6 +1320,7 @@ public final class K5Bridge {
                         return;
                     }
                     if (settled.compareAndSet(false, true)) {
+                        bridge.geoSessions.remove(id);
                         cancel();
                         bridge.replyLocation(id, location);
                     }

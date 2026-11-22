@@ -30,6 +30,31 @@
           <a-button v-show="route.path !== '/tool/flash'" type="primary" @click="connectIt">{{ appStore.connectState ? $t('navbar.disconnect') : $t('navbar.connect') }}</a-button>
         </li>
         <li>
+          <a-tooltip :content="usbLogVisible ? '隐藏 WebUSB 日志' : '显示 WebUSB 日志'">
+            <a-button
+              class="nav-btn"
+              type="outline"
+              :shape="'circle'"
+              @click="toggleUsbLog"
+            >
+              <template #icon>
+                <span class="serial-icon-wrap">
+                  <svg class="serial-icon" viewBox="0 0 24 24" width="17" height="17" fill="none"
+                    stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3.5 6.5 h17 l-1.8 8.6 a2.8 2.8 0 0 1 -2.8 2.3 h-7.8 a2.8 2.8 0 0 1 -2.8 -2.3 Z" />
+                    <circle cx="8" cy="10.5" r="1" fill="currentColor" stroke="none" />
+                    <circle cx="12" cy="10.5" r="1" fill="currentColor" stroke="none" />
+                    <circle cx="16" cy="10.5" r="1" fill="currentColor" stroke="none" />
+                    <path d="M8 17.5 v2 M16 17.5 v2" />
+                  </svg>
+                  <icon-eye v-if="usbLogVisible" class="serial-eye" />
+                  <icon-eye-invisible v-else class="serial-eye" />
+                </span>
+              </template>
+            </a-button>
+          </a-tooltip>
+        </li>
+        <li>
           <a-tooltip :content="$t('settings.language')">
             <a-button
               class="nav-btn"
@@ -88,6 +113,31 @@
         <li>
           <a-button v-show="route.path !== '/tool/flash' && route.path !== '/idea/firmware'" type="primary" @click="connectIt">{{ appStore.connectState ? $t('navbar.disconnect') : $t('navbar.connect') }}</a-button>
           <a-button disabled="disabled" title="升级模式无需连接" v-show="route.path == '/tool/flash' || route.path == '/idea/firmware'" type="primary" @click="connectIt">{{ appStore.connectState ? $t('navbar.disconnect') : $t('navbar.connect') }}</a-button>
+        </li>
+        <li>
+          <a-tooltip :content="usbLogVisible ? '隐藏 WebUSB 日志' : '显示 WebUSB 日志'">
+            <a-button
+              class="nav-btn"
+              type="outline"
+              :shape="'circle'"
+              @click="toggleUsbLog"
+            >
+              <template #icon>
+                <span class="serial-icon-wrap">
+                  <svg class="serial-icon" viewBox="0 0 24 24" width="17" height="17" fill="none"
+                    stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3.5 6.5 h17 l-1.8 8.6 a2.8 2.8 0 0 1 -2.8 2.3 h-7.8 a2.8 2.8 0 0 1 -2.8 -2.3 Z" />
+                    <circle cx="8" cy="10.5" r="1" fill="currentColor" stroke="none" />
+                    <circle cx="12" cy="10.5" r="1" fill="currentColor" stroke="none" />
+                    <circle cx="16" cy="10.5" r="1" fill="currentColor" stroke="none" />
+                    <path d="M8 17.5 v2 M16 17.5 v2" />
+                  </svg>
+                  <icon-eye v-if="usbLogVisible" class="serial-eye" />
+                  <icon-eye-invisible v-else class="serial-eye" />
+                </span>
+              </template>
+            </a-button>
+          </a-tooltip>
         </li>
         <li>
           <a-tooltip :content="$t('settings.language')">
@@ -176,6 +226,7 @@
   import useUser from '@/hooks/user';
   import Menu from '@/components/menu/index.vue';
   import { connect, disconnect, eeprom_init, rtc_sync_beijing } from '@/utils/serial.js';
+  import { isDebugOverlayEnabled, setDebugOverlayEnabled } from '@/utils/serial-log.js';
   import { useI18n } from 'vue-i18n';
   const { t } = useI18n();
   const drivers = import.meta.glob('@/drivers/*.json', { eager: true });
@@ -229,6 +280,14 @@
     Message.success(res as string);
   };
   const toggleDrawerMenu = inject('toggleDrawerMenu') as () => void;
+
+  // 右下角 WebUSB 日志窗口显示/隐藏：与 serial-log.js 浮层开关同步，
+  // 睁眼=显示，闭眼(划线)=隐藏。初始状态取浮层当前实际状态。
+  const usbLogVisible = ref(isDebugOverlayEnabled());
+  const toggleUsbLog = () => {
+    usbLogVisible.value = !usbLogVisible.value;
+    setDebugOverlayEnabled(usbLogVisible.value);
+  };
 
   const configuration_list : any = {
     "L_BL[0-9][0-9][0-9]" : "losehubl.json",
@@ -399,6 +458,23 @@
     }
     .trigger-btn {
       margin-left: 14px;
+    }
+    // 串口图标 + 右下角眼睛叠加（WebUSB 日志开关按钮）
+    .serial-icon-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .serial-eye {
+      position: absolute;
+      right: -6px;
+      bottom: -5px;
+      font-size: 13px;
+      color: rgb(var(--gray-8));
+      background: var(--color-bg-3);
+      border-radius: 50%;
+      line-height: 1;
     }
   }
 </style>

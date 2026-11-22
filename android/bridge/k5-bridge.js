@@ -71,8 +71,8 @@
   }
 
   function call(method, args) {
-    return new Promise(function (resolve, reject) {
-      var id = String(++seq);
+    var id = String(++seq);
+    var p = new Promise(function (resolve, reject) {
       pending.set(id, { resolve: resolve, reject: reject });
       try {
         NATIVE[method](id, JSON.stringify(args || {}));
@@ -81,6 +81,9 @@
         reject(e);
       }
     });
+    // 把本次请求 id 挂到 promise 上，供取消类接口（如卫星定位）定位目标请求
+    p.__k5id = id;
+    return p;
   }
 
   function makeError(name, message) {
@@ -711,6 +714,10 @@
     // （name 为 NotAllowedError / NotSupportedError / LocationServiceDisabled）。
     checkLocationEnv: function (opts) {
       return call('checkLocationEnv', opts || {});
+    },
+    // 中止进行中的原生卫星定位：targetId 为 getLocation promise 上的 __k5id
+    cancelLocation: function (targetId) {
+      return call('cancelLocation', { targetId: targetId });
     },
   };
 
