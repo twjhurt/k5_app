@@ -43,6 +43,8 @@
                 </a-select>
                 <a-link @click="() => { state.selfSatModal = true }" style="margin-top: 10px;">{{ $t("sat.addSelfSat")
                   }}</a-link>
+                <a-button size="small" style="margin-left: 16px; margin-top: 10px;"
+                  @click="importLastEphemeris">{{ $t('tool.sat.importLast') }}</a-button>
               </div>
             </a-form-item>
             <div class="sat2-table-wrap">
@@ -70,6 +72,9 @@ import QRCode from 'qrcode';
 import { Input, Select } from 'tdesign-vue-next';
 import { Message } from '@arco-design/web-vue';
 import { parseGpJson, parseSelfSatInput, ommToTle } from '@/utils/satellite.js';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 // Must match ESP32 mapping in src/app/driver/eeprom.cpp
 // EEPROM 0x1E200..0x20000 -> shared offset 0x10000..
@@ -473,6 +478,15 @@ const initSat = async () => {
     // 仅在解析出有效数据时写入缓存，避免把限流/错误页缓存后整段会话无法恢复
     if (!cached && ommList.length) {
       sessionStorage.setItem('satGpJson', rst)
+      // 星历通过网络获取成功时提示（缓存加载不提示）
+      Message.success(t('tool.sat.fetchSuccess'))
+    }
+    // 星历获取成功：自动保存最新星历到应用内部存储（localStorage，关闭应用不清除），
+    // 与"星历写入"页共享同一份，供"导入上次星历"按钮使用，并记录保存时间
+    if (ommList.length) {
+      try {
+        localStorage.setItem('k5webLastEphemeris', JSON.stringify({ data: rst, savedAt: Date.now() }))
+      } catch { /* 存储写入失败不影响正常流程 */ }
     }
     state.satData = ommList.map((omm: any) => ({
       name: omm.OBJECT_NAME,
@@ -483,6 +497,33 @@ const initSat = async () => {
   }
 }
 initSat()
+
+// 导入上次保存的星历（应用内部存储）：行为与"星历写入"页的同名按钮保持一致
+const importLastEphemeris = () => {
+  try {
+    const raw = localStorage.getItem('k5webLastEphemeris')
+    if (!raw) {
+      Message.warning(t('tool.sat.noSavedEph'))
+      return
+    }
+    const obj = JSON.parse(raw)
+    const ommList = parseGpJson(obj.data || '')
+    if (!ommList.length) {
+      Message.warning(t('tool.sat.savedEphInvalid'))
+      return
+    }
+    state.satData = ommList.map((omm: any) => ({
+      name: omm.OBJECT_NAME,
+      omm,
+    }))
+    const p = (n: number) => String(n).padStart(2, '0')
+    const d = new Date(obj.savedAt)
+    const ts = `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+    Message.success(t('tool.sat.importedEph', { time: ts }))
+  } catch {
+    Message.error(t('tool.sat.importFailed'))
+  }
+}
 
 const handleOk = async () => {
   const lol = await (await fetch('https://k5.vicicode.cn/api/lol', {
