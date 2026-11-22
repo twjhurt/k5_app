@@ -103,7 +103,14 @@
               </a-select>
             </a-form-item>
             <a-form-item :label-col-style="{ width: '25%' }" label="">
-              <a-button type="primary" @click="writeIt">{{ $t('tool.writeData') }}</a-button>
+              <a-space>
+                <a-button type="primary" @click="writeIt">{{ $t('tool.writeData') }}</a-button>
+                <a-button v-if="!state.autoOpenLook4sat" @click="openLook4sat">打开look4sat</a-button>
+                <span style="display: inline-flex; align-items: center;">
+                  <a-switch v-model="state.autoOpenLook4sat" type="round" @change="saveAutoOpenLook4sat" />
+                  <span style="margin-left: 8px; font-size: 12px;">写入后自动打开look4sat</span>
+                </span>
+              </a-space>
             </a-form-item>
             <a-divider />
             <div id="statusArea" class="status-area">{{ state.status }}</div>
@@ -171,6 +178,7 @@ const state: {
   visible: boolean,
   selfSatModal: boolean,
   selfSatInfo: string,
+  autoOpenLook4sat: boolean,
 } = reactive({
   uuid: '',
   qrcode: '',
@@ -200,10 +208,31 @@ const state: {
   timer: undefined,
   passCustom: undefined,
   dtCustom: undefined,
-  freqDb: [],
   selfSatModal: false,
   selfSatInfo: '',
+  autoOpenLook4sat: false,
 })
+
+// 写入后自动打开 look4sat 开关：持久化到 localStorage
+state.autoOpenLook4sat = localStorage.getItem('satAutoOpenLook4sat') === '1'
+const saveAutoOpenLook4sat = (val: any) => {
+  try { localStorage.setItem('satAutoOpenLook4sat', val ? '1' : '0') } catch { }
+}
+
+// 打开 look4sat（原生桥 K5APP.openApp；桌面端提示不支持）
+const LOOK4SAT_PKG = 'cn.ba7opf.looksat'
+const openLook4sat = async () => {
+  const k5app = (typeof window !== 'undefined') ? (window as any).K5APP : null
+  if (k5app && typeof k5app.openApp === 'function') {
+    try {
+      await k5app.openApp(LOOK4SAT_PKG)
+    } catch (err: any) {
+      Message.error((err && err.message) ? err.message : '未安装 look4sat，无法打开')
+    }
+  } else {
+    Message.warning('当前环境不支持直接打开安卓应用（仅安卓端可用）')
+  }
+}
 
 onMounted(async () => {
   try {
@@ -217,16 +246,19 @@ onMounted(async () => {
   }
   catch { }
 
-  state.lng = parseFloat(localStorage.getItem('myLng') || '0')
-  state.lat = parseFloat(localStorage.getItem('myLat') || '0')
-  state.alt = parseFloat(localStorage.getItem('myAlt') || '0')
+  // 定位已完成时跳过 localStorage 恢复，避免覆盖定位结果（竞态保护）
+  if (!locFilled) {
+    state.lng = parseFloat(localStorage.getItem('myLng') || '0')
+    state.lat = parseFloat(localStorage.getItem('myLat') || '0')
+    state.alt = parseFloat(localStorage.getItem('myAlt') || '0')
 
-  await lngRef.value.$forceUpdate()
-  await latRef.value.$forceUpdate()
-  await altRef.value.$forceUpdate()
-  state.lng = parseFloat(lngRef.value.inputRef.modelValue || '0')
-  state.lat = parseFloat(latRef.value.inputRef.modelValue || '0')
-  state.alt = parseFloat(altRef.value.inputRef.modelValue || '0')
+    await lngRef.value.$forceUpdate()
+    await latRef.value.$forceUpdate()
+    await altRef.value.$forceUpdate()
+    state.lng = parseFloat(lngRef.value.inputRef.modelValue || '0')
+    state.lat = parseFloat(latRef.value.inputRef.modelValue || '0')
+    state.alt = parseFloat(altRef.value.inputRef.modelValue || '0')
+  }
 
   state.timer = setInterval(() => {
     state.dt = new Date().toLocaleString()
@@ -326,6 +358,8 @@ const cancelFetchEphemeris = () => {
 const locState = reactive({ locating: false, stage: '网络定位', elapsed: 0 });
 let locTimer: any = null;
 let locCancelled = false;
+// 定位是否已成功填入经纬度：用于挂载恢复 localStorage 时避免覆盖定位结果
+let locFilled = false;
 // 当前定位任务的取消控制器：cancel() 会中止原生卫星定位并丢弃后续结果
 let locateCtl: { cancel: () => void } | null = null;
 const startLocTip = () => {
@@ -453,6 +487,8 @@ const getLocation = async () => {
   p.then((e) => {
     stopLocTip()
     if (locCancelled) { setLoading(false); return }
+    Message.success('定位成功')
+    locFilled = true
     if (e.coords) {
       state.lat = e.coords.latitude
       state.lng = e.coords.longitude
@@ -659,6 +695,8 @@ const writeIt = async () => {
   await restoreRange(0x1E200, payload)
   await syncTime()
   await eeprom_reboot(appStore.connectPort);
+  // 写入成功：开关开启时自动跳转 look4sat
+  if (state.autoOpenLook4sat) { openLook4sat() }
   setLoading(false)
 }
 

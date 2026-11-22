@@ -721,6 +721,13 @@
     },
   };
 
+  // 应用间跳转：打开指定包名的安卓应用（如 look4sat）
+  window.K5APP = {
+    openApp: function (packageName) {
+      return call('openApp', { packageName: packageName });
+    },
+  };
+
   // 方便用户/支持人员排查：window.k5diag()
   window.k5diag = function () {
     try {

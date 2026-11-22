@@ -1243,6 +1243,52 @@ public final class K5Bridge {
         t.start();
     }
 
+    /**
+     * 打开指定包名的安卓应用（argsJson.packageName）：用于"打开 look4sat"按钮
+     * 与写入星历成功后自动跳转。未安装时回复 NotFoundError。
+     */
+    @JavascriptInterface
+    public void openApp(final String id, final String argsJson) {
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String pkg = null;
+                    try {
+                        pkg = new JSONObject(argsJson == null ? "{}" : argsJson).optString("packageName", null);
+                    } catch (Throwable ignored) {
+                    }
+                    if (pkg == null || pkg.length() == 0) {
+                        replyError(id, "InvalidStateError", "openApp 缺少 packageName");
+                        return;
+                    }
+                    final String packageName = pkg;
+                    final Intent intent = activity.getPackageManager().getLaunchIntentForPackage(packageName);
+                    if (intent == null) {
+                        replyError(id, "NotFoundError", "未安装应用：" + packageName);
+                        return;
+                    }
+                    activity.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                activity.startActivity(intent);
+                                replyOk(id, new JSONObject());
+                            } catch (Throwable t) {
+                                replyError(id, t);
+                            }
+                        }
+                    });
+                } catch (Throwable t) {
+                    replyError(id, t);
+                }
+            }
+        }, "k5-openapp");
+        t.setDaemon(true);
+        t.start();
+    }
+
     private void geoAcquire(final String id) {
         try {
             // 前置环境检查：先权限，后定位服务开关；未通过（含服务未开启弹窗）直接返回
