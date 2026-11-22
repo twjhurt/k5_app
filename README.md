@@ -109,7 +109,13 @@ powershell -ExecutionPolicy Bypass -File .\android\build.ps1 -VersionName 1.0.17
 
 ## 开源协议
 
+本项目使用MIT许可证，内容见下：
 ```
+MIT License
+
+Copyright (c) 2026 twjhurt
+Copyright (c) 2024-2025 Silent YANG
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
