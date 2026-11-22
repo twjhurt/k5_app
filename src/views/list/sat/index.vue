@@ -220,7 +220,7 @@ const saveAutoOpenLook4sat = (val: any) => {
 }
 
 // 打开 look4sat（原生桥 K5APP.openApp；桌面端提示不支持）
-const LOOK4SAT_PKG = 'cn.ba7opf.looksat'
+const LOOK4SAT_PKG = 'cn.ba7opf.look4sat'
 const openLook4sat = async () => {
   const k5app = (typeof window !== 'undefined') ? (window as any).K5APP : null
   if (k5app && typeof k5app.openApp === 'function') {

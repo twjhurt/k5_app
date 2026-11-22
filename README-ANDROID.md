@@ -2,17 +2,24 @@
 
 把仓库里的 K5Web（UV-K5/K6 写频 Web 应用）整合成一个**可离线运行、能通过 OTG 连接手台**的安卓安装包。
 
-- 安装包：`release/K5Web-android-1.0.23.apk`（3.94 MB，已签名，minSdk 26 / targetSdk 34）
-- SHA-256：`6E3E8755FD6B41993C20531A17CDF910788D6D8E9B0317EA2E4772EB42E2CF8C`
+- 安装包：`release/K5Web-android-1.0.24.apk`（3.94 MB，已签名，minSdk 26 / targetSdk 34）
+- SHA-256：`270CC0C3F49161DF308DE40D41992B2FAAC28346D934FEBD92C5EE32017728F1`
 - 应用名：K5Web 写频
-- 版本：versionCode 24 / versionName 1.0.23（同签名，可直接覆盖安装旧版）
+- 版本：versionCode 25 / versionName 1.0.24（同签名，可直接覆盖安装旧版）
+
+## v1.0.24：修正 look4sat 包名
+
+1. **包名修正**：打开/自动打开的目标应用包名由 `cn.ba7opf.looksat` 修正为
+   `cn.ba7opf.look4sat`（v1.0.23 包名有误，会导致"未安装应用"提示）。
+
+> 其余内容与 v1.0.23 相同，继续保留。
 
 ## v1.0.23：look4sat 联动 + 定位成功提示
 
 1. **定位成功提示**：定位成功后显示"定位成功"提示；移动端消息容器下移到
    顶栏之下，提示不遮挡顶栏与其他提示。
 2. **"打开look4sat"按钮**：星历写入页"写入数据"右侧新增，点击通过原生
-   桥（K5APP.openApp）打开包名 `cn.ba7opf.looksat` 的应用；未安装/桌面端
+   桥（K5APP.openApp）打开包名 `cn.ba7opf.look4sat` 的应用；未安装/桌面端
    给出对应提示。
 3. **"写入后自动打开look4sat"开关**：位于打开按钮右侧，样式参考设备管理
    的"本地播放首尾音频"开关；开启后隐藏"打开look4sat"按钮，点击"写入数据"
