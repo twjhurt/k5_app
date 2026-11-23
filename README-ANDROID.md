@@ -2,10 +2,24 @@
 
 把仓库里的 K5Web（UV-K5/K6 写频 Web 应用）整合成一个**可离线运行、能通过 OTG 连接手台**的安卓安装包。
 
-- 安装包：`release/K5Web-android-1.0.27.apk`（3.94 MB，已签名，minSdk 26 / targetSdk 34）
-- SHA-256：`5B669D080DF5D4AA62A5ABF7DAFF76DFADE834F177E0327AD4F601A5A11DA94C`
+- 安装包：`release/K5Web-android-1.0.28.apk`（3.94 MB，已签名，minSdk 26 / targetSdk 34）
+- SHA-256：`642914CA9EB591E9C94E1E9DF270FA6BE181C898417C87D29B0C090CABE0B616`
 - 应用名：K5Web 写频
-- 版本：versionCode 28 / versionName 1.0.27（同签名，可直接覆盖安装旧版）
+- 版本：versionCode 29 / versionName 1.0.28（同签名，可直接覆盖安装旧版）
+
+## v1.0.28：启动时按手机语言自动切换界面语言
+
+1. **启动语言检测**：无手动语言选择时，按手机系统语言自动判定——中文
+   （简体/繁体，zh-CN/zh-TW/zh-HK/zh-Hant 等一律归一化）→ 中文界面；
+   英语及其他任何语言（en-GB/fr/ja 等）→ English 界面。
+2. **手动选择优先**：顶栏语言菜单切换过的选择继续优先并持久化，用户随时
+   可以改回（回滚）；切换行为与 v1.0.27 之前一致。
+3. **修复隐患**：旧逻辑直接把原始 `navigator.language`（如 zh-TW、en-GB）
+   作为 locale 键，不在消息表内会导致组件文案回退错乱；现统一归一化到
+   zh-CN / en-US 两个合法值。
+
+> 已通过手机模拟 e2e 验证 10 个场景（简/繁/英/英英/其他语言/手动优先）
+> 全部 PASS；其余内容与 v1.0.27 相同，继续保留。
 
 ## v1.0.27：星历写入2.0 成功提示 + 导入上次星历
 
