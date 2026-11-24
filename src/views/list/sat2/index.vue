@@ -407,15 +407,17 @@ const syncTime = async () => {
   await eeprom_write(appStore.connectPort, 0x02BA0, new Uint8Array(dateArray), 0x06, appStore.configuration?.uart);
 }
 
-const changeSat = async (sat: any) => {
-  state.warnings = []
+// 单颗卫星完整处理：下拉框选中（changeSat）与"一键加入收藏卫星"共用的代码路径，
+// 保证两种入口行为完全一致（TLE 还原 + 状态区输出 + NORAD 警告 + 频率回填 + 加入表格）。
+// 返回 true=已加入表格；false=数据缺失/星历不完整未加入。不修改下拉框选中值 state.sat。
+const processSatToTable = (sat: string): boolean => {
   const data = state.satData.find(e => e.name == sat);
   if (!data) {
     nextTick(() => {
       const textarea = document?.getElementById('statusArea');
       if (textarea) textarea.scrollTop = textarea?.scrollHeight;
     })
-    return
+    return false
   }
   // 设备固件按经典 69 字节 TLE 存星历；CelesTrak OMM 在写入前才还原
   let line: string[] | undefined
@@ -432,52 +434,57 @@ const changeSat = async (sat: any) => {
       const textarea = document?.getElementById('statusArea');
       if (textarea) textarea.scrollTop = textarea?.scrollHeight;
     })
-    return
+    return false
   }
-  if (line) {
-    state.status += '\n卫星参数：\n'
-    line.map((e: string) => {
-      state.status += e + '\n'
-    })
-    const noradNum = data.omm ? Number(data.omm.NORAD_CAT_ID) : 0
-    if (noradNum >= 100000) {
-      state.warnings.push(`注意：NORAD ${noradNum} 已超过经典 TLE 5 位编号，写入设备的编号为后 5 位（${String(noradNum).slice(-5)}）。轨道根数仍可用。`)
-    }
-    let freqFlag = false
-    const noradId = data.omm
-      ? String(data.omm.NORAD_CAT_ID)
-      : (line[1]?.split(' ')[1] || '').trim()
-    state.freqDb.map((e: any) => {
-      if (noradId && noradId == e.norad_id && e.mode.indexOf('FM') != -1) {
-        console.log(e)
-        freqFlag = true
-        state.tx = e.uplink ? parseFloat(e.uplink.split('/')[0]) : 0
-        state.rx = e.downlink ? parseFloat(e.downlink.split('/')[0]) : 0
-        state.txTone = parseFloat(state.CTCSSOption.reduce((_e: any, _n: any) => {
-          return e.mode.indexOf(_n) != -1 ? _n : _e
-        }))
-      }
-    })
-    if (!freqFlag) {
-      state.tx = 0
-      state.rx = 0
-      state.txTone = 0
-      state.rxTone = 0
-    }
-    state.satsData.push({
-      "satName": sat,
-      "line": line,
-      "txFreq": state.tx,
-      "txTone": state.txTone,
-      "rxFreq": state.rx,
-      "rxTone": state.rxTone
-    })
-    console.log(state.satsData)
+  state.status += '\n卫星参数：\n'
+  line.map((e: string) => {
+    state.status += e + '\n'
+  })
+  const noradNum = data.omm ? Number(data.omm.NORAD_CAT_ID) : 0
+  if (noradNum >= 100000) {
+    state.warnings.push(`注意：NORAD ${noradNum} 已超过经典 TLE 5 位编号，写入设备的编号为后 5 位（${String(noradNum).slice(-5)}）。轨道根数仍可用。`)
   }
+  let freqFlag = false
+  const noradId = data.omm
+    ? String(data.omm.NORAD_CAT_ID)
+    : (line[1]?.split(' ')[1] || '').trim();
+  // 行首分号不可省：上一行以 .trim() 结尾，若无分号会被 ASI 解析成 .trim()(...) 调用链
+  ;(state.freqDb || []).map((e: any) => {
+    if (noradId && noradId == e.norad_id && e.mode.indexOf('FM') != -1) {
+      console.log(e)
+      freqFlag = true
+      state.tx = e.uplink ? parseFloat(e.uplink.split('/')[0]) : 0
+      state.rx = e.downlink ? parseFloat(e.downlink.split('/')[0]) : 0
+      state.txTone = parseFloat(state.CTCSSOption.reduce((_e: any, _n: any) => {
+        return e.mode.indexOf(_n) != -1 ? _n : _e
+      }))
+    }
+  })
+  if (!freqFlag) {
+    state.tx = 0
+    state.rx = 0
+    state.txTone = 0
+    state.rxTone = 0
+  }
+  state.satsData.push({
+    "satName": sat,
+    "line": line,
+    "txFreq": state.tx,
+    "txTone": state.txTone,
+    "rxFreq": state.rx,
+    "rxTone": state.rxTone
+  })
+  console.log(state.satsData)
   nextTick(() => {
     const textarea = document?.getElementById('statusArea');
     if (textarea) textarea.scrollTop = textarea?.scrollHeight;
   })
+  return true
+}
+
+const changeSat = async (sat: any) => {
+  state.warnings = []
+  processSatToTable(sat)
 }
 
 const initSat = async () => {
@@ -559,68 +566,28 @@ const toggleFav = (name: string) => {
 // 仅显示收藏卫星：开启时下拉框只列出收藏项
 const displayedSats = computed(() => (state.onlyFav ? state.satData.filter((e: any) => isFav(e.name)) : state.satData))
 
-// 一键加入收藏卫星：把当前收藏的卫星按选中逻辑（TLE 还原 + 频率回填）批量加入下方表格
+// 一键加入收藏卫星：每颗收藏卫星都执行与"选择卫星"下拉框选中后完全相同的处理
+// （共用 processSatToTable：TLE 还原 + 状态区输出 + 频率回填 + 加入表格），不影响下拉框选中值
 const addFavToTable = () => {
   if (!favSats.value.length) {
     Message.warning(t('tool.sat.noFavs'))
     return
   }
+  // 与下拉框单次选中行为一致：本次流程开始时清空警告区
+  state.warnings = []
   let added = 0
   let dup = 0
   const missing: string[] = []
   for (const name of favSats.value) {
-    const data = state.satData.find((e: any) => e.name === name)
-    if (!data) {
-      missing.push(name)
-      continue
-    }
     if (state.satsData.some((r: any) => r.satName === name)) {
       dup++
       continue
     }
-    // 与 changeSat 相同的 TLE 还原逻辑
-    let line: string[] | undefined
-    if (data.omm) {
-      line = ommToTle(data.omm) || undefined
-    } else if (data.tle1 && data.tle2) {
-      line = [data.tle1, data.tle2]
-    } else if (data.path?.length >= 2) {
-      line = data.path
-    }
-    if (!line) {
+    if (processSatToTable(name)) {
+      added++
+    } else {
       missing.push(name)
-      continue
     }
-    // 与 changeSat 相同的频率回填逻辑
-    let freqFlag = false
-    let tx = 0, rx = 0, txTone = 0
-    const noradId = data.omm
-      ? String(data.omm.NORAD_CAT_ID)
-      : (line[1]?.split(' ')[1] || '').trim()
-    (state.freqDb || []).map((e: any) => {
-      if (noradId && noradId == e.norad_id && e.mode.indexOf('FM') != -1) {
-        freqFlag = true
-        tx = e.uplink ? parseFloat(e.uplink.split('/')[0]) : 0
-        rx = e.downlink ? parseFloat(e.downlink.split('/')[0]) : 0
-        txTone = parseFloat(state.CTCSSOption.reduce((_e: any, _n: any) => {
-          return e.mode.indexOf(_n) != -1 ? _n : _e
-        }))
-      }
-    })
-    if (!freqFlag) {
-      tx = 0
-      rx = 0
-      txTone = 0
-    }
-    state.satsData.push({
-      "satName": name,
-      "line": line,
-      "txFreq": tx,
-      "txTone": txTone,
-      "rxFreq": rx,
-      "rxTone": 0
-    })
-    added++
   }
   if (added > 0) {
     Message.success(t('tool.sat.favsAdded', { count: added }))
