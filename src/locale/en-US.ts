@@ -120,6 +120,8 @@ export default {
   'tool.sat.stageNetwork': 'Network positioning',
   'tool.sat.stageGnss': 'GNSS positioning',
   'tool.sat.importLast': 'Import last ephemeris',
+  'tool.sat.onlyFav': 'Favorites only',
+  'tool.sat.favToggle': 'Favorite / Unfavorite',
   'tool.sat.openLook4sat': 'Open look4sat',
   'tool.sat.autoOpenLook4sat': 'Auto-open look4sat after writing',
   'tool.sat.locSuccess': 'Location acquired',

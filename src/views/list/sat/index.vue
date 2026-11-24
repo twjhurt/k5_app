@@ -49,11 +49,25 @@
               <div style="width: 100%;">
                 <a-select v-model="state.sat" @change="changeSat" :placeholder="$t('tool.selectSatellite') + '...'"
                   allow-search allow-clear>
-                  <a-option v-for="item in state.satData" :key="item.name" :value="item.name">{{ item.name }}</a-option>
+                  <a-option v-for="item in displayedSats" :key="item.name" :value="item.name"
+                    style="position: relative;">
+                    <span
+                      style="display: block; overflow: hidden; text-overflow: ellipsis; padding-right: 30px;">{{ item.name }}</span>
+                    <span class="sat-fav-star" :title="$t('tool.sat.favToggle')"
+                      style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; flex-shrink: 0;"
+                      @click.stop="toggleFav(item.name)">
+                      <icon-star-fill v-if="isFav(item.name)" style="color: #f7ba1e; font-size: 14px;" />
+                      <icon-star v-else style="color: #86909c; font-size: 14px;" />
+                    </span>
+                  </a-option>
                 </a-select>
                 <a-link @click="() => { state.selfSatModal = true }" style="margin-top: 10px;">{{ $t("sat.addSelfSat")
                   }}</a-link>
                 <a-button size="small" style="margin-left: 16px; margin-top: 10px;" @click="importLastEphemeris">{{ $t('tool.sat.importLast') }}</a-button>
+                <span style="display: inline-flex; align-items: center; margin-left: 16px; margin-top: 10px;">
+                  <a-switch v-model="state.onlyFav" type="round" />
+                  <span style="margin-left: 8px; font-size: 12px;">{{ $t('tool.sat.onlyFav') }}</span>
+                </span>
               </div>
             </a-form-item>
             <a-form-item :label-col-style="{ width: '25%' }" field="lng" :label="$t('tool.longitude')">
@@ -181,6 +195,7 @@ const state: {
   selfSatModal: boolean,
   selfSatInfo: string,
   autoOpenLook4sat: boolean,
+  onlyFav: boolean,
 } = reactive({
   uuid: '',
   qrcode: '',
@@ -213,7 +228,25 @@ const state: {
   selfSatModal: false,
   selfSatInfo: '',
   autoOpenLook4sat: false,
+  onlyFav: false,
 })
+
+// 收藏卫星：localStorage 持久化（存卫星名称列表）
+const favSats = ref<string[]>((() => {
+  try { return JSON.parse(localStorage.getItem('k5webFavSats') || '[]') } catch { return [] }
+})())
+const isFav = (name: string) => favSats.value.includes(name)
+const toggleFav = (name: string) => {
+  const i = favSats.value.indexOf(name)
+  if (i >= 0) {
+    favSats.value.splice(i, 1)
+  } else {
+    favSats.value.push(name)
+  }
+  try { localStorage.setItem('k5webFavSats', JSON.stringify(favSats.value)) } catch { }
+}
+// 仅显示收藏卫星：开启时下拉框只列出收藏项
+const displayedSats = computed(() => (state.onlyFav ? state.satData.filter((e: any) => isFav(e.name)) : state.satData))
 
 // 写入后自动打开 look4sat 开关：持久化到 localStorage
 state.autoOpenLook4sat = localStorage.getItem('satAutoOpenLook4sat') === '1'

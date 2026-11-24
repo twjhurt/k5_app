@@ -120,6 +120,8 @@ export default {
   'tool.sat.stageNetwork': '网络定位',
   'tool.sat.stageGnss': '卫星定位',
   'tool.sat.importLast': '导入上次星历',
+  'tool.sat.onlyFav': '仅显示收藏卫星',
+  'tool.sat.favToggle': '收藏/取消收藏',
   'tool.sat.openLook4sat': '打开look4sat',
   'tool.sat.autoOpenLook4sat': '写入后自动打开look4sat',
   'tool.sat.locSuccess': '定位成功',
