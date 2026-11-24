@@ -2,10 +2,15 @@
 
 把仓库里的 K5Web（UV-K5/K6 写频 Web 应用）整合成一个**可离线运行、能通过 OTG 连接手台**的安卓安装包。
 
-- 安装包：`release/K5Web-android-1.0.30.apk`（3.94 MB，已签名，minSdk 26 / targetSdk 34）
-- SHA-256：`C62C6A7F60402D8AAF0A3155E353FAC00FFA7FD72F07FE1657B0230EE5312BF5`
+- 安装包：`release/K5Web-android-1.0.31.apk`（3.94 MB，已签名，minSdk 26 / targetSdk 34）
+- SHA-256：`32893517986D9A496A32BE845CB249C454EA27AB39D72EE63EFEAFC5B5CA3044`
 - 应用名：K5Web 写频
-- 版本：versionCode 31 / versionName 1.0.30（同签名，可直接覆盖安装旧版）
+- 版本：versionCode 32 / versionName 1.0.31（同签名，可直接覆盖安装旧版）
+
+## v1.0.31：定位服务引导弹窗跟随系统语言
+
+1. **原生弹窗双语**：定位服务未开启时的系统设置引导弹窗（标题/正文/按钮）跟随手机系统语言——中文系统显示中文，其他语言（含 English）显示英语；弹窗失败时的兜底 Toast 同步双语化
+2. 判定规则与 Web 端一致：系统区域 zh 开头 → 中文，其余 → English
 
 ## v1.0.30：唯一收藏卫星自动选中
 

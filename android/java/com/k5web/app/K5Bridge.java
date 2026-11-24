@@ -1438,7 +1438,25 @@ public final class K5Bridge {
     /** 定位服务（GPS/网络定位开关）未开启时弹窗引导用户前往系统设置开启；重复触发不叠加弹窗。 */
     private android.app.AlertDialog geoSettingsDialog;
 
+    /** 界面语言跟随系统区域设置：zh 开头视为中文，其余（含 English）一律英语。 */
+    private static boolean isZhLocale() {
+        try {
+            java.util.Locale l = android.content.res.Resources.getSystem().getConfiguration().locale;
+            return l != null && l.getLanguage() != null && l.getLanguage().startsWith("zh");
+        } catch (Throwable t) {
+            return true; // 取不到区域设置时保守回退中文
+        }
+    }
+
     private void promptEnableLocationService() {
+        final boolean zh = isZhLocale();
+        final String dlgTitle = zh ? "定位服务未开启" : "Location services disabled";
+        final String dlgMsg = zh ? "获取经纬度需要开启设备的定位服务（GPS）。是否前往系统设置开启？"
+                : "Getting coordinates requires the device's location services (GPS) to be turned on. Open system settings to enable it?";
+        final String dlgPos = zh ? "去开启" : "Enable";
+        final String dlgNeg = zh ? "取消" : "Cancel";
+        final String toastMsg = zh ? "设备定位服务未开启：请打开系统的 GPS/定位开关"
+                : "Location services are off: please enable GPS/location in system settings";
         activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -1447,10 +1465,10 @@ public final class K5Bridge {
                         return; // 已有引导弹窗，不重复弹
                     }
                     geoSettingsDialog = new android.app.AlertDialog.Builder(activity)
-                            .setTitle("定位服务未开启")
-                            .setMessage("获取经纬度需要开启设备的定位服务（GPS）。是否前往系统设置开启？")
+                            .setTitle(dlgTitle)
+                            .setMessage(dlgMsg)
                             .setCancelable(true)
-                            .setPositiveButton("去开启", new android.content.DialogInterface.OnClickListener() {
+                            .setPositiveButton(dlgPos, new android.content.DialogInterface.OnClickListener() {
                                 @Override
                                 public void onClick(android.content.DialogInterface dialog, int which) {
                                     try {
@@ -1461,14 +1479,14 @@ public final class K5Bridge {
                                     }
                                 }
                             })
-                            .setNegativeButton("取消", null)
+                            .setNegativeButton(dlgNeg, null)
                             .show();
                 } catch (Throwable t) {
                     Log.w(TAG, "show location dialog failed", t);
                     // 弹窗失败（如页面切换中）时退化为 Toast 提示
                     try {
                         android.widget.Toast.makeText(activity,
-                                "设备定位服务未开启：请打开系统的 GPS/定位开关",
+                                toastMsg,
                                 android.widget.Toast.LENGTH_LONG).show();
                     } catch (Throwable ignored) {
                     }
