@@ -2,10 +2,14 @@
 
 把仓库里的 K5Web（UV-K5/K6 写频 Web 应用）整合成一个**可离线运行、能通过 OTG 连接手台**的安卓安装包。
 
-- 安装包：`release/K5Web-android-1.0.32.apk`（3.94 MB，已签名，minSdk 26 / targetSdk 34）
-- SHA-256：`34CACA412B91ECBEF4EB542B090D81F3DBDB764829E3D1C3F1A68369236535DE`
+- 安装包：`release/K5Web-android-1.0.33.apk`（3.89 MB，已签名，minSdk 26 / targetSdk 34）
+- SHA-256：`3036B05F0851F48F474031AE4A8AE96E8F4A46629412B564EB4EDDC4911F36BB`
 - 应用名：K5Web 写频
-- 版本：versionCode 33 / versionName 1.0.32（同签名，可直接覆盖安装旧版）
+- 版本：versionCode 34 / versionName 1.0.33（同签名，可直接覆盖安装旧版）
+
+## v1.0.33：修复"仅显示收藏卫星"开关不居中
+
+1. **布局修复**：星历写入 1.0 / 2.0 两页中，"仅显示收藏卫星"开关与相邻按钮（添加我的卫星 / 导入上次星历 / 一键加入收藏卫星）改为 flex 弹性行排列，自动垂直居中，窄屏换行后同样保持对齐；不再出现开关高低错位
 
 ## v1.0.32：星历写入2.0 收藏卫星克隆 + 一键加入收藏卫星
 

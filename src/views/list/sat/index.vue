@@ -61,13 +61,14 @@
                     </span>
                   </a-option>
                 </a-select>
-                <a-link @click="() => { state.selfSatModal = true }" style="margin-top: 10px;">{{ $t("sat.addSelfSat")
-                  }}</a-link>
-                <a-button size="small" style="margin-left: 16px; margin-top: 10px;" @click="importLastEphemeris">{{ $t('tool.sat.importLast') }}</a-button>
-                <span style="display: inline-flex; align-items: center; margin-left: 16px; margin-top: 10px;">
-                  <a-switch v-model="state.onlyFav" type="round" />
-                  <span style="margin-left: 8px; font-size: 12px;">{{ $t('tool.sat.onlyFav') }}</span>
-                </span>
+                <div style="display: flex; flex-wrap: wrap; align-items: center; margin-top: 10px; gap: 16px;">
+                  <a-link @click="() => { state.selfSatModal = true }">{{ $t("sat.addSelfSat") }}</a-link>
+                  <a-button size="small" @click="importLastEphemeris">{{ $t('tool.sat.importLast') }}</a-button>
+                  <span style="display: inline-flex; align-items: center;">
+                    <a-switch v-model="state.onlyFav" type="round" />
+                    <span style="margin-left: 8px; font-size: 12px;">{{ $t('tool.sat.onlyFav') }}</span>
+                  </span>
+                </div>
               </div>
             </a-form-item>
             <a-form-item :label-col-style="{ width: '25%' }" field="lng" :label="$t('tool.longitude')">
