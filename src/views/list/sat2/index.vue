@@ -39,12 +39,28 @@
               <div style="width: 100%;">
                 <a-select v-model="state.sat" @change="changeSat" :placeholder="$t('tool.selectSatellite') + '...'"
                   allow-search allow-clear>
-                  <a-option v-for="item in state.satData" :key="item.name" :value="item.name">{{ item.name }}</a-option>
+                  <a-option v-for="item in displayedSats" :key="item.name" :value="item.name"
+                    style="position: relative;">
+                    <span
+                      style="display: block; overflow: hidden; text-overflow: ellipsis; padding-right: 30px;">{{ item.name }}</span>
+                    <span class="sat-fav-star" :title="$t('tool.sat.favToggle')"
+                      style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; flex-shrink: 0;"
+                      @click.stop="toggleFav(item.name)">
+                      <icon-star-fill v-if="isFav(item.name)" style="color: #f7ba1e; font-size: 14px;" />
+                      <icon-star v-else style="color: #86909c; font-size: 14px;" />
+                    </span>
+                  </a-option>
                 </a-select>
                 <a-link @click="() => { state.selfSatModal = true }" style="margin-top: 10px;">{{ $t("sat.addSelfSat")
                   }}</a-link>
                 <a-button size="small" style="margin-left: 16px; margin-top: 10px;"
                   @click="importLastEphemeris">{{ $t('tool.sat.importLast') }}</a-button>
+                <a-button size="small" style="margin-left: 16px; margin-top: 10px;"
+                  @click="addFavToTable">{{ $t('tool.sat.addFavToTable') }}</a-button>
+                <span style="display: inline-flex; align-items: center; margin-left: 16px; margin-top: 10px;">
+                  <a-switch v-model="state.onlyFav" type="round" />
+                  <span style="margin-left: 8px; font-size: 12px;">{{ $t('tool.sat.onlyFav') }}</span>
+                </span>
               </div>
             </a-form-item>
             <div class="sat2-table-wrap">
@@ -127,6 +143,7 @@ const state: {
   visible: boolean,
   selfSatModal: boolean,
   selfSatInfo: string,
+  onlyFav: boolean,
   satsData: any[]
 } = reactive({
   uuid: '',
@@ -160,6 +177,7 @@ const state: {
   freqDb: [],
   selfSatModal: false,
   selfSatInfo: '',
+  onlyFav: false,
   satsData: []
 })
 
@@ -522,6 +540,97 @@ const importLastEphemeris = () => {
     Message.success(t('tool.sat.importedEph', { time: ts }))
   } catch {
     Message.error(t('tool.sat.importFailed'))
+  }
+}
+
+// 收藏卫星：与"星历写入"页共享同一份 localStorage 存储（k5webFavSats，存卫星名称列表）
+const favSats = ref<string[]>((() => {
+  try { return JSON.parse(localStorage.getItem('k5webFavSats') || '[]') } catch { return [] }
+})())
+const isFav = (name: string) => favSats.value.includes(name)
+const toggleFav = (name: string) => {
+  const i = favSats.value.indexOf(name)
+  if (i >= 0) {
+    favSats.value.splice(i, 1)
+  } else {
+    favSats.value.push(name)
+  }
+  try { localStorage.setItem('k5webFavSats', JSON.stringify(favSats.value)) } catch { }
+}
+// 仅显示收藏卫星：开启时下拉框只列出收藏项
+const displayedSats = computed(() => (state.onlyFav ? state.satData.filter((e: any) => isFav(e.name)) : state.satData))
+
+// 一键加入收藏卫星：把当前收藏的卫星按选中逻辑（TLE 还原 + 频率回填）批量加入下方表格
+const addFavToTable = () => {
+  if (!favSats.value.length) {
+    Message.warning(t('tool.sat.noFavs'))
+    return
+  }
+  let added = 0
+  let dup = 0
+  const missing: string[] = []
+  for (const name of favSats.value) {
+    const data = state.satData.find((e: any) => e.name === name)
+    if (!data) {
+      missing.push(name)
+      continue
+    }
+    if (state.satsData.some((r: any) => r.satName === name)) {
+      dup++
+      continue
+    }
+    // 与 changeSat 相同的 TLE 还原逻辑
+    let line: string[] | undefined
+    if (data.omm) {
+      line = ommToTle(data.omm) || undefined
+    } else if (data.tle1 && data.tle2) {
+      line = [data.tle1, data.tle2]
+    } else if (data.path?.length >= 2) {
+      line = data.path
+    }
+    if (!line) {
+      missing.push(name)
+      continue
+    }
+    // 与 changeSat 相同的频率回填逻辑
+    let freqFlag = false
+    let tx = 0, rx = 0, txTone = 0
+    const noradId = data.omm
+      ? String(data.omm.NORAD_CAT_ID)
+      : (line[1]?.split(' ')[1] || '').trim()
+    (state.freqDb || []).map((e: any) => {
+      if (noradId && noradId == e.norad_id && e.mode.indexOf('FM') != -1) {
+        freqFlag = true
+        tx = e.uplink ? parseFloat(e.uplink.split('/')[0]) : 0
+        rx = e.downlink ? parseFloat(e.downlink.split('/')[0]) : 0
+        txTone = parseFloat(state.CTCSSOption.reduce((_e: any, _n: any) => {
+          return e.mode.indexOf(_n) != -1 ? _n : _e
+        }))
+      }
+    })
+    if (!freqFlag) {
+      tx = 0
+      rx = 0
+      txTone = 0
+    }
+    state.satsData.push({
+      "satName": name,
+      "line": line,
+      "txFreq": tx,
+      "txTone": txTone,
+      "rxFreq": rx,
+      "rxTone": 0
+    })
+    added++
+  }
+  if (added > 0) {
+    Message.success(t('tool.sat.favsAdded', { count: added }))
+  }
+  if (dup > 0) {
+    Message.info(t('tool.sat.favsDup', { count: dup }))
+  }
+  if (missing.length > 0) {
+    Message.warning(t('tool.sat.favsMissing', { names: missing.join('、') }))
   }
 }
 
