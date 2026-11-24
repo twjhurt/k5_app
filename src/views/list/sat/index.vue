@@ -136,7 +136,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, computed, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Message } from '@arco-design/web-vue';
 import { useAppStore } from '@/store';
@@ -248,6 +248,20 @@ const toggleFav = (name: string) => {
 // 仅显示收藏卫星：开启时下拉框只列出收藏项
 const displayedSats = computed(() => (state.onlyFav ? state.satData.filter((e: any) => isFav(e.name)) : state.satData))
 
+// 唯一收藏自动选中：收藏恰好一颗且下拉框已有数据、尚未选择时，自动选中该项
+watch(
+  () => [state.satData.length, favSats.value.length] as const,
+  ([dataLen, favLen]) => {
+    if (dataLen > 0 && favLen === 1 && !state.sat) {
+      const name = favSats.value[0]
+      if (state.satData.some((e: any) => e.name === name)) {
+        state.sat = name
+        changeSat(name)
+      }
+    }
+  },
+)
+
 // 写入后自动打开 look4sat 开关：持久化到 localStorage
 state.autoOpenLook4sat = localStorage.getItem('satAutoOpenLook4sat') === '1'
 const saveAutoOpenLook4sat = (val: any) => {
@@ -351,7 +365,7 @@ const changeSat = async (sat: any) => {
     const noradId = data.omm
       ? String(data.omm.NORAD_CAT_ID)
       : (data.tle2?.split(' ')[1] || '').trim()
-    state.freqDb.map((e: any) => {
+    (state.freqDb || []).map((e: any) => {
       if (noradId && noradId == e.norad_id && e.mode.indexOf('FM') != -1) {
         console.log(e)
         freqFlag = true
