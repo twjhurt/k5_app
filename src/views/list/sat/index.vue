@@ -459,19 +459,27 @@ const initSat = async () => {
       const ctrl = new AbortController()
       ephAbort = ctrl
       try {
-        rst = await (await fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=json', { signal: ctrl.signal })).text()
+        const res = await fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=json', { signal: ctrl.signal })
         // 取消后才返回的响应：丢弃，不进入解析
         if (ctrl.signal.aborted) {
           Message.info(t('tool.sat.fetchCanceled'))
           return
         }
+        // HTTP 非 200（如 CelesTrak 限流 503 返回错误页）：明确提示，而不是静默解析出空列表
+        if (!res.ok) {
+          Message.error({ content: t('tool.sat.fetchHttpError', { code: res.status }), duration: 5000 })
+          return
+        }
+        rst = await res.text()
       } catch (err: any) {
         // 用户点击"终止获取"：关闭提示窗并恢复状态，不再走后续解析
         if (err && (err.name === 'AbortError' || ephAbort === null)) {
           Message.info(t('tool.sat.fetchCanceled'))
           return
         }
-        throw err
+        // 其他网络异常：明确提示（此前为静默失败）
+        Message.error({ content: t('tool.sat.fetchNetError', { msg: err?.message || String(err) }), duration: 5000 })
+        return
       } finally {
         ephState.fetching = false
         ephAbort = null
@@ -483,6 +491,10 @@ const initSat = async () => {
       sessionStorage.setItem('satGpJson', rst)
       // 星历通过网络获取成功时提示（缓存加载不提示）
       Message.success(t('tool.sat.fetchSuccess'))
+    }
+    // 解析不到卫星（如返回了错误页/空数据）：给出明确提示，而不是静默呈现空列表
+    if (!ommList.length) {
+      Message.warning({ content: t('tool.sat.fetchEmpty'), duration: 5000 })
     }
     // 星历获取成功：自动把最新星历保存到应用内部存储（localStorage，关闭应用不清除），并记录保存时间
     if (ommList.length) {

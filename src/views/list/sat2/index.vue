@@ -496,7 +496,24 @@ const initSat = async () => {
     if (cached) {
       rst = cached
     } else {
-      rst = await (await fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=json')).text()
+      // 联网获取前检测网络：无网络则提示且不发起请求（与"星历写入"页一致）
+      if (!navigator.onLine) {
+        Message.error({ content: t('tool.sat.noNetwork'), duration: 5000 })
+        return
+      }
+      try {
+        const res = await fetch('https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=json')
+        // HTTP 非 200（如 CelesTrak 限流 503 返回错误页）：明确提示，而不是静默解析出空列表
+        if (!res.ok) {
+          Message.error({ content: t('tool.sat.fetchHttpError', { code: res.status }), duration: 5000 })
+          return
+        }
+        rst = await res.text()
+      } catch (err: any) {
+        // 网络异常：明确提示（此前为静默失败）
+        Message.error({ content: t('tool.sat.fetchNetError', { msg: err?.message || String(err) }), duration: 5000 })
+        return
+      }
     }
     const ommList = parseGpJson(rst)
     // 仅在解析出有效数据时写入缓存，避免把限流/错误页缓存后整段会话无法恢复
@@ -504,6 +521,10 @@ const initSat = async () => {
       sessionStorage.setItem('satGpJson', rst)
       // 星历通过网络获取成功时提示（缓存加载不提示）
       Message.success(t('tool.sat.fetchSuccess'))
+    }
+    // 解析不到卫星（如返回了错误页/空数据）：给出明确提示，而不是静默呈现空列表
+    if (!ommList.length) {
+      Message.warning({ content: t('tool.sat.fetchEmpty'), duration: 5000 })
     }
     // 星历获取成功：自动保存最新星历到应用内部存储（localStorage，关闭应用不清除），
     // 与"星历写入"页共享同一份，供"导入上次星历"按钮使用，并记录保存时间
