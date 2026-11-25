@@ -1,30 +1,42 @@
 # K5Web 安卓离线版
-**请注意：不建议使用本应用来刷写固件！因为：①手机的数据口和写频线的连接稳定性无法保证②本项目完全vibecoding！本人没有代码基础，无法对项目负责！**
 
-基于开源项目 [K5Web](https://github.com/silenty4ng/k5web)（UV-K5/K6 写频 Web 应用）构建的**安卓离线版**：将完整 Web 应用打包为单个 APK，内置站点资源，无需网络即可运行，并通过原生 USB 桥驱动 CH340/CH341 写频线（OTG）连接手台，实现写频、备份、固件升级等全部功能。
+> **⚠️ 使用前必读**
+>
+> 1. **不建议用本应用刷写固件**：手机数据口与写频线的连接稳定性无法保证，刷写中断可能导致变砖。写频、备份等常规操作不受影响。
+> 2. **本项目完全 vibe coding**：作者没有代码基础，由 AI 辅助逐版本迭代而成，无法对项目做任何承诺，请自行评估风险、量力使用。
 
-> 下载最新 APK 请前往 [**Releases**](https://github.com/twjhurt/k5_app/releases)（v1.0.0 ~ v1.0.17 全部历史版本均已发布）。
+基于开源项目 [K5Web](https://github.com/silenty4ng/k5web)（UV-K5/K6 写频 Web 应用）构建的**安卓离线版**：把完整 Web 应用打包成单个 APK，站点资源内置，**无需网络即可运行**；通过原生 USB 桥（K5Bridge）驱动 CH340/CH341 写频线（OTG）连接手台，写频、备份、固件升级等全部功能与桌面版一致。
+
+**从 [Releases](https://github.com/twjhurt/k5_app/releases) 下载 APK**
 
 ## 特性
 
 - **完全离线**：Web 应用整体打包进 APK，打开即用，不依赖外网
 - **OTG 直连写频**：原生 K5Bridge USB 串口桥驱动 CH340/CH341 写频线，功能与桌面版一致
-- **手机/电脑版切换**：原生悬浮按钮（📱/🖥️ 图标），一键切换视口与 UA，支持拖拽换位，尺寸不随页面缩放
-- **深色模式跟随系统**：每次冷启动重新检测系统深浅色，不残留手动偏好
-- **横屏伪全屏**：开机图片等横屏编辑场景自动进入沉浸式横屏（说实话，我不知道AI为什么会写这么个东西，实际上我没体验到）
-- **星历本地缓存**：星历获取成功后自动保存到应用内部存储，可一键"导入上次星历"，在离线环境下也能勉强使用
-- **重新撰写定位逻辑**：先进行网络定位再进行卫星定位。其实我还专门问了下ai，网络定位指的是基于webview下的定位。详细处理逻辑见下图：
-<img width="1704" height="1206" alt="定位两阶段真实信号源" src="https://github.com/user-attachments/assets/a304a76f-4cad-45c3-bab0-ac035c9a1071" />
-（说实话到底有没有什么用我是怀疑的，因为我觉得webview好像就可以了（我测试的设备上面），但是我还是加了个这个）
+- **手机 / 电脑视图切换**：悬浮按钮一键切换视口与 UA，支持拖拽换位，尺寸不随页面缩放
+- **深色模式跟随系统**：每次冷启动重新检测系统深浅色
+- **中英双语**：启动时按手机系统语言自动切换界面语言（简繁归一化为中文，其他语言为 English），也可手动切换
+- **星历体系**：
+  - 联网获取星历，带进度提示窗与"终止获取"（离线时自动使用缓存）
+  - 获取成功后自动保存到应用内部存储，随时一键"导入上次星历"，纯离线也能用
+  - **收藏卫星**：星历写入 / 星历写入 2.0 两页共享收藏列表（下拉框星标收藏、"仅显示收藏卫星"过滤、唯一收藏自动选中、"一键加入收藏卫星"批量入表）
+- **look4sat 联动**：写入星历成功后可自动跳转 look4sat 查看过境与多普勒
+- **两阶段定位**：先 WebView 网络定位、失败自动切换卫星定位，全程有进度提示窗、可中断；定位服务未开启时给出引导弹窗（跟随系统语言）
+
+<p align="center">
+  <img width="1704" height="1206" alt="定位两阶段真实信号源" src="https://github.com/user-attachments/assets/a304a76f-4cad-45c3-bab0-ac035c9a1071" />
+</p>
+
+> 定位这东西到底有没有比纯 WebView 方案更好，作者其实也怀疑（实测设备上 WebView 就够了），但既然做了就留着吧。
 
 ## 功能列表
 
 - 固件版本 / EEPROM 大小检测
 - 信道管理（手机版表格分页已适配）
-- 备份 / 还原 EEPROM（快速 / 完整 / 清空，含读超时自动重试）
+- 备份 / 还原 EEPROM（快速 / 完整 / 清空，完整备份含前置校验与读超时自动重试）
 - 固件升级
 - 开机图片读取与写入（LOSEHU 固件）
-- 字库写入、星历写入（LOSEHU 固件）
+- 字库写入、星历写入（普通版 + 2.0 表格版，LOSEHU 固件）
 - 启动画面文字管理
 - MDC 联系人管理、本地侧音控制
 - DTMF ID 设置、收音机频道管理
@@ -32,12 +44,12 @@
 
 ## 安装
 
-1. 从 [Releases](https://github.com/twjhurt/k5_app/releases) 下载最新 APK（如 `K5Web-android-1.0.17.apk`）
+1. 从 [Releases](https://github.com/twjhurt/k5_app/releases) 下载最新 APK（如 `K5Web-android-1.0.35.apk`）
 2. 允许安装未知来源应用后直接安装（minSdk 26 / targetSdk 34，Android 8.0+）
 3. 所有版本**同签名**，可直接覆盖安装升级，无需卸载旧版
-4. 使用时用 OTG 线连接 CH340 写频线与手台，打开应用选择串口设备即可
+4. 用 OTG 线连接 CH340 写频线与手台，打开应用选择串口设备即可
 
-详细版本变更记录见 [README-ANDROID.md](./README-ANDROID.md)。
+每个版本的详细变更记录见 [README-ANDROID.md](./README-ANDROID.md)。
 
 ## 从源码构建
 
@@ -57,7 +69,7 @@ npm run build   # 产物输出至 dist/
 ### APK 打包
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\android\build.ps1 -VersionName 1.0.17 -VersionCode 18
+powershell -ExecutionPolicy Bypass -File .\android\build.ps1 -VersionName 1.0.35 -VersionCode 36
 ```
 
 流程：`vite build` → 同步 `dist/` 到 `android/assets/www/`（含注入桥 `k5-bridge.js`）→ `javac` 编译原生层（`MainActivity.java` WebView 壳 + `K5Bridge.java` USB 串口桥）→ `apksigner` 签名（密钥库默认 `android/build/k5web.keystore`，密码从环境变量 `K5WEB_KS_PASS` 或本地 `android/build/ks.pass.txt` 读取）→ 产物输出至 `release/`。
@@ -78,7 +90,7 @@ powershell -ExecutionPolicy Bypass -File .\android\build.ps1 -VersionName 1.0.17
 │   ├── assets/www/         # dist 构建产物同步目标（不入库）
 │   └── build.ps1           # APK 打包脚本
 ├── release/                # 各版本 APK 产物（已入库并发布至 Releases）
-└── README-ANDROID.md       # 安卓版详细变更记录
+└── README-ANDROID.md       # 安卓版逐版本变更记录
 ```
 
 ## 讨论（上游社区，本仓库未搭建讨论社区！）
@@ -93,7 +105,7 @@ powershell -ExecutionPolicy Bypass -File .\android\build.ps1 -VersionName 1.0.17
 - 星历计算接口：https://github.com/silenty4ng/k5sat
 - LTS 固件：https://github.com/silenty4ng/uv-k5-firmware-chinese-lts
 - k5web：https://github.com/silenty4ng/k5web
-- k5web（他人fork支持手机版）： https://github.com/wty2019wty/k5web
+- k5web（他人 fork 支持手机版）：https://github.com/wty2019wty/k5web
 
 ## 感谢项目
 
@@ -109,7 +121,8 @@ powershell -ExecutionPolicy Bypass -File .\android\build.ps1 -VersionName 1.0.17
 
 ## 开源协议
 
-本项目使用MIT许可证，内容见下：
+本项目使用 MIT 许可证，内容见下：
+
 ```
 MIT License
 
