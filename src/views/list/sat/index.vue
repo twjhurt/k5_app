@@ -365,8 +365,10 @@ const changeSat = async (sat: any) => {
     let freqFlag = false
     const noradId = data.omm
       ? String(data.omm.NORAD_CAT_ID)
-      : (data.tle2?.split(' ')[1] || '').trim()
-    (state.freqDb || []).map((e: any) => {
+      : (data.tle2?.split(' ')[1] || '').trim();
+    // 行首分号不可省：上一行以 .trim() 结尾，若无分号会被 ASI 解析成 .trim()(...) 调用链，
+    // 导致 OMM 路径跳过整个频率库匹配（回填失效）、TLE 路径直接报错
+    ;(state.freqDb || []).map((e: any) => {
       if (noradId && noradId == e.norad_id && e.mode.indexOf('FM') != -1) {
         console.log(e)
         freqFlag = true
