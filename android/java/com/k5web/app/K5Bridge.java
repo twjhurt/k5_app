@@ -1173,8 +1173,9 @@ public final class K5Bridge {
     }
 
     /**
-     * 定位环境前置检查公共实现：① 权限检测；② 定位服务开关检测（位于权限
-     * 检测之后）。不通过时回复对应错误并返回 false（服务未开启同时弹窗引导）。
+     * 定位环境前置检查公共实现：① 权限检测（缺失时主动弹系统授权对话框，
+     * 用户拒绝后才报"去设置"错误）；② 定位服务开关检测（位于权限检测之后）。
+     * 不通过时回复对应错误并返回 false（服务未开启同时弹窗引导）。
      */
     private boolean geoEnvReady(final String id) {
         boolean fine = activity.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
@@ -1182,8 +1183,11 @@ public final class K5Bridge {
         boolean coarse = activity.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION)
                 == android.content.pm.PackageManager.PERMISSION_GRANTED;
         if (!fine && !coarse) {
-            replyError(id, "NotAllowedError", "定位权限未授予：请在系统设置中允许本应用使用位置权限");
-            return false;
+            // 首次定位：主动弹系统授权对话框，而不是要求用户去系统设置手动开
+            if (!requestLocationPermissionBlocking()) {
+                replyError(id, "NotAllowedError", "定位权限未授予：请在系统设置中允许本应用使用位置权限");
+                return false;
+            }
         }
         final LocationManager lm = (LocationManager) activity.getSystemService(Context.LOCATION_SERVICE);
         if (lm == null) {
@@ -1199,6 +1203,61 @@ public final class K5Bridge {
             return false;
         }
         return true;
+    }
+
+    // ---- 定位权限前置申请 ----
+    // geoEnvReady 发起系统授权对话框后阻塞等待用户答复；结果由
+    // MainActivity.onRequestPermissionsResult → onLocationPermissionResult 唤醒。
+
+    /** 等待授权结果的通知锁；geoPermResult 为 null 表示尚在等待用户答复。 */
+    private final Object geoPermLock = new Object();
+    private Boolean geoPermResult;
+
+    /** MainActivity 权限回调转发：唤醒等待中的定位前置检查线程（无人等待时仅记录）。 */
+    void onLocationPermissionResult(boolean granted) {
+        synchronized (geoPermLock) {
+            geoPermResult = granted;
+            geoPermLock.notifyAll();
+        }
+    }
+
+    /**
+     * 在 UI 线程发起系统授权申请并阻塞等待答复。只能在桥接的后台线程调用
+     * （k5-geoenv / k5-geo）。超时（3 分钟）、发起失败或用户拒绝均按未授予处理。
+     */
+    private boolean requestLocationPermissionBlocking() {
+        if (!(activity instanceof MainActivity)) {
+            return false; // 非常规宿主：直接按未授予处理，走原有"去设置"提示
+        }
+        final MainActivity act = (MainActivity) activity;
+        synchronized (geoPermLock) {
+            geoPermResult = null;
+            act.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        act.requestLocationPermissions();
+                    } catch (Throwable t) {
+                        Log.w(TAG, "request location permission failed", t);
+                        onLocationPermissionResult(false);
+                    }
+                }
+            });
+            long deadline = System.currentTimeMillis() + 180_000L;
+            while (geoPermResult == null) {
+                long remain = deadline - System.currentTimeMillis();
+                if (remain <= 0) {
+                    return false;
+                }
+                try {
+                    geoPermLock.wait(remain);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+            return geoPermResult;
+        }
     }
 
     /** 进行中的卫星定位会话表：key 为本次请求的桥接 id，取消/完成/超时后移除。 */

@@ -669,17 +669,21 @@ public class MainActivity extends Activity implements K5Bridge.Host {
                 == PackageManager.PERMISSION_GRANTED;
     }
 
+    /**
+     * 供桥接层定位前置检查（K5Bridge）在权限缺失时主动发起系统授权弹窗，
+     * 结果经 onRequestPermissionsResult（REQ_GEO_LOCATION）回传给桥接层。
+     */
+    void requestLocationPermissions() {
+        requestPermissions(new String[]{
+                android.Manifest.permission.ACCESS_FINE_LOCATION,
+                android.Manifest.permission.ACCESS_COARSE_LOCATION,
+        }, REQ_GEO_LOCATION);
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode != REQ_GEO_LOCATION) {
-            return;
-        }
-        GeolocationPermissions.Callback callback = pendingGeoCallback;
-        String origin = pendingGeoOrigin;
-        pendingGeoCallback = null;
-        pendingGeoOrigin = null;
-        if (callback == null) {
             return;
         }
         boolean granted = false;
@@ -688,6 +692,17 @@ public class MainActivity extends Activity implements K5Bridge.Host {
                 granted = true;
                 break;
             }
+        }
+        // 前置检查路径：桥接层主动申请权限后阻塞等待该结果（此时无 WebView prompt 回调）。
+        if (bridge != null) {
+            bridge.onLocationPermissionResult(granted);
+        }
+        GeolocationPermissions.Callback callback = pendingGeoCallback;
+        String origin = pendingGeoOrigin;
+        pendingGeoCallback = null;
+        pendingGeoOrigin = null;
+        if (callback == null) {
+            return;
         }
         try {
             callback.invoke(origin, granted, false);
