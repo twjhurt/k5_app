@@ -40,7 +40,7 @@
                 <a-select v-model="state.sat" @change="changeSat" :placeholder="$t('tool.selectSatellite') + '...'"
                   allow-search allow-clear>
                   <a-option v-for="item in displayedSats" :key="item.name" :value="item.name"
-                    style="position: relative;">
+                    style="position: relative;" @click="onSatOptionClick(item.name)">
                     <span
                       style="display: block; overflow: hidden; text-overflow: ellipsis; padding-right: 30px;">{{ item.name }}</span>
                     <span class="sat-fav-star" :title="$t('tool.sat.favToggle')"
@@ -482,8 +482,31 @@ const processSatToTable = (sat: string): boolean => {
   return true
 }
 
+// 重复选星拦截：两条入口互补，用"@change 是否触发"区分场景，无竞态：
+// ① 选择其他已在表格中的卫星：Arco @change 正常触发 → changeSat 拦截并提示
+// ② 重选"当前已选中"的同一选项：Arco 不触发 @change（静默关闭弹层）→ 选项原生 click 兜底：
+//    延迟 60ms 后检查 lastChangeAt，若 @change 未发生且该卫星已在表格中才提示，避免与①重复/误判
+let lastChangeAt = 0
+const onSatOptionClick = (name: string) => {
+  if (!name) return
+  setTimeout(() => {
+    if (Date.now() - lastChangeAt < 200) return // @change 已触发，changeSat 已处理（首次新增或已拦截提示）
+    if (state.satsData.some((r: any) => r.satName === name)) {
+      Message.warning(t('tool.sat.satInTable'))
+      state.sat = ''
+    }
+  }, 60)
+}
+
 const changeSat = async (sat: any) => {
+  lastChangeAt = Date.now()
   state.warnings = []
+  // 已在表格中的卫星：不执行后续代码（不重复入表），提示后清空下拉框选中值（选项保留）
+  if (sat && state.satsData.some((r: any) => r.satName === sat)) {
+    Message.warning(t('tool.sat.satInTable'))
+    state.sat = ''
+    return
+  }
   processSatToTable(sat)
 }
 
